@@ -130,4 +130,4 @@ Deliberately left out of the MVP: logins inside the generated app, multiple reso
 3. Write a ~40-line `s2c-client.js` that does the same thing from Node and saves `index.html`.
 4. Report back with: the JSON you saw, the saved `index.html`, and the problems you hit.
 
-**Environment notes (lead's machine, 13 Oct 2026):** Node 26, npm 11, Git, Python 3.14 and Poetry 2.5 are installed. Docker and MongoDB are **not** installed, so we run Screenshot-to-Code with Poetry (no Docker). Still to check: whether its Python version requirement accepts 3.14.
+**Environment notes (lead's machine, 13 Oct 2026):** Node 26, npm 11, Git, Python 3.14 and Poetry 2.5 are installed. Docker and MongoDB are **not** installed, so we run Screenshot-to-Code with Poetry (no Docker). Still to check: whether its Python version requirement accepts3.14
