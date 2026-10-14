@@ -1,19 +1,30 @@
-# Architecture: Two-Laptop, Local-LLM Frontend-to-Backend Builder
+# Architecture v2: Synced Two-Laptop Builder → Working App → User's GitHub
 
-> **One-line summary:** Laptop B runs Screenshot-to-Code behind our own small REST API and produces the **frontend**. Laptop A runs our own pipeline, which reads the **same screenshot at the same time** and produces the **backend**. A final step joins the two into one working app. All AI runs on free local models.
+> **One-line summary:** From one screenshot we first extract a small **Contract** (resource, fields, actions). **Both laptops build against that same Contract at the same time**: Laptop B builds the frontend (Screenshot-to-Code, GPU) and Laptop A builds the backend (our templates). A **Sync Barrier** waits until both are built for the *same* Contract version. Then we **wire, verify, preview** and **push a working app to the user's GitHub**. Local free models are the default, and a cloud API key is the automatic backup.
 
-**Status:** Draft for team review · **Date:** 14 Oct 2026 · **Related:** [plan.md](plan.md) (this document updates its Q3 and Q5)
+**Status:** Draft v2 for team review · **Date:** 14 Oct 2026 · Replaces v1 · Related: [plan.md](plan.md)
 
 ---
 
-## 1. Why this design (the four decisions)
+## 0. What's new compared with v1
 
-| # | Decision | Why |
+| v1 | v2 (this document) | Why |
 |---|---|---|
-| 1 | **Split the work across two laptops by job** | Local AI models are memory-hungry. One 16 GB laptop can't run Screenshot-to-Code's model *and* our model at the same time without both slowing down. Two machines give real parallelism. |
-| 2 | **Wrap Screenshot-to-Code in our own small REST "Gateway"** | Screenshot-to-Code only offers an internal WebSocket. Our Gateway turns it into a simple, stable REST API (`POST` a screenshot, `GET` the result) that anything can call. |
-| 3 | **Fan-out / fan-in: both branches start from the image** | Total time becomes *the slower of the two branches*, not *the sum of both*. The developer reviews the backend plan **while** the frontend is still being generated, so no waiting time is wasted. |
-| 4 | **The LLM writes a short JSON spec, never the backend code** | Local models are slow at writing long outputs and make mistakes in them. A spec of about 300 tokens is fast and easy to check. Templates turn it into backend code instantly and reliably. This is the biggest speed and quality win. |
+| Frontend and backend built separately, reconciled at the end | **Contract-first:** both sides build from one shared Contract | The frontend and backend agree *by design*, not by guessing afterwards |
+| No real "sync" | **State machine + Contract version + Sync Barrier** | Neither side can ship with a version that doesn't match the other |
+| Local models only | **Provider Router:** local first, cloud key as an automatic backup | The demo can't fail just because a local model struggled |
+| Developer downloads a zip | **Verify → Live preview → Push to the user's GitHub** | The user gets a working app in their own repo |
+
+---
+
+## 1. The six core ideas
+
+1. **The Contract is the single source of truth.** A small JSON document (§4) says what the app is: the resource, fields, actions and rules. Everything else is built *from* it.
+2. **Laptop A is the orchestrator; Laptop B is a worker.** A owns all state (MongoDB) and decides what happens next. B only does what A asks, and **A always calls B, never the reverse**. Only B needs an open port, and A always knows the true state.
+3. **Every artifact is stamped with the Contract hash.** Frontend HTML, backend code and tests each record which Contract version they were built from.
+4. **The Sync Barrier.** Integration starts only when `frontend.contractHash == backend.contractHash == contract.currentHash`. This rule is what keeps the two laptops in sync.
+5. **Guide the frontend, don't guess it.** Screenshot-to-Code accepts text instructions along with the image (verified in its source). We send it the Contract's exact field names plus fixed `data-field` and `data-action` markers. The frontend then has the hooks the backend expects.
+6. **Ship only what passed verification.** Automated checks run before a preview or a GitHub push.
 
 ---
 
@@ -21,288 +32,367 @@
 
 ```mermaid
 flowchart LR
-    U[Developer's browser<br/>Our React UI] -->|REST| API
+    USER[User's browser] -->|HTTPS/REST + login with GitHub| UI
 
-    subgraph A["Laptop A — Builder Node (M5, 16 GB)"]
-        API[Builder API<br/>Node + Express]
+    subgraph A["Laptop A — Orchestrator (Apple M5, 16 GB)"]
+        UI[Our React UI]
+        ORCH[Builder API + Orchestrator<br/>Node/Express<br/>state machine]
         DB[(MongoDB<br/>builder_db)]
-        SPEC[Spec Extractor<br/>vision LLM to JSON]
-        GEN[Template Generator<br/>no AI]
-        WIRE[Reconciler + Wirer<br/>Babel AST]
-        OA[Ollama<br/>qwen3-vl:8b]
-        API --> DB
-        API --> SPEC --> OA
-        API --> GEN
-        API --> WIRE
+        CX[Contract Extractor]
+        ROUTER_A[Provider Router]
+        OA[Ollama qwen3-vl:8b]
+        GEN[Backend Generator<br/>templates, no AI]
+        WIRE[Wirer + Verifier<br/>Babel AST + tests]
+        RUN[Preview Runner<br/>Docker sandbox]
+        PUB[GitHub Publisher]
+        UI --> ORCH --> DB
+        ORCH --> CX --> ROUTER_A --> OA
+        ROUTER_A -.backup.-> CLOUD
+        ORCH --> GEN
+        ORCH --> WIRE
+        ORCH --> RUN
+        ORCH --> PUB
     end
 
-    subgraph B["Laptop B — UI Node"]
-        GW[S2C Gateway<br/>our REST API]
-        S2C[Screenshot-to-Code<br/>FastAPI, unmodified + 1 patch]
-        OB[Ollama<br/>vision/coder model<br/>aliased as gpt-5.5]
-        GW -->|WebSocket, localhost| S2C -->|OpenAI-compatible API| OB
+    subgraph B["Laptop B — UI Worker (RTX 4060 8 GB VRAM, 16 GB RAM)"]
+        GW[S2C Gateway<br/>our REST API<br/>queue + Provider Router]
+        S2C[Screenshot-to-Code<br/>pinned a813977 + 2-line patch]
+        OB[Ollama on CUDA<br/>qwen3-vl:8b, alias gpt-5.5]
+        GW -->|WebSocket localhost| S2C
+        S2C -->|local mode| OB
+        S2C -.cloud mode.-> CLOUD
     end
 
-    API -->|REST over Tailscale / LAN<br/>X-API-Key| GW
-```
-
-**Plain-words version:**
-
-```
-                 ┌──────────── Laptop B (UI Node) ────────────┐
-screenshot ──┬──▶│ Gateway ──WS──▶ Screenshot-to-Code ──▶ Ollama│──▶ index.html (frontend)
-             │   └────────────────────────────────────────────┘          │
-             │   ┌──────────── Laptop A (Builder Node) ───────┐          ▼
-             └──▶│ Spec Extractor ──▶ Ollama ──▶ JSON spec    │──▶ developer approves
-                 │                                            │          │
-                 │ Template Generator ──▶ Express + Mongo code│◀─────────┘
-                 │ Reconciler/Wirer: joins frontend + backend │──▶ app.zip
-                 └────────────────────────────────────────────┘
+    CLOUD[(Cloud LLM API<br/>backup key, e.g. Gemini)]
+    ORCH -->|REST over Tailscale<br/>X-API-Key| GW
+    PUB -->|GitHub REST API| GH[(User's GitHub repo)]
 ```
 
 ---
 
-## 3. What runs where
+## 3. The build lifecycle (state machine)
 
-| Machine | Runs | Owns | Does *not* do |
-|---|---|---|---|
-| **Laptop B: UI Node** | Screenshot-to-Code backend, **S2C Gateway** (ours), Ollama | Turning a screenshot into `index.html` | Store users or projects, generate backends |
-| **Laptop A: Builder Node** | Our React UI, **Builder API** (Express), MongoDB, Ollama | Projects, jobs, the spec, backend generation, wiring, the zip | Generate UI |
-| **Developer's machine** | The downloaded generated app | Running and testing it | Nothing runs on our servers (safety) |
-
-> **Who built what?** Screenshot-to-Code (MIT license, pinned at commit `a813977`) is the only third-party code, and it stays on Laptop B. **Everything else is ours**: the Gateway, Builder API, Spec Extractor, Template Generator, Wirer and UI.
-
----
-
-## 4. Request flow, step by step
+Every project moves through these states. A stores them in MongoDB, and the UI shows them live.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant UI as Our UI
-    participant API as Builder API (A)
-    participant SX as Spec Extractor (A)
-    participant GW as Gateway (B)
-    participant S2C as Screenshot-to-Code (B)
+stateDiagram-v2
+    [*] --> UPLOADED
+    UPLOADED --> CONTRACT_DRAFT: Contract Extractor (A)
+    CONTRACT_DRAFT --> BUILDING: fan-out
 
-    UI->>API: POST /api/projects (screenshot)
-    API->>API: hash image, check cache, save project
-    par Branch 1: frontend
-        API->>GW: POST /v1/generations (image)
-        GW-->>API: 202 { jobId }
-        GW->>S2C: WebSocket /generate-code
-        S2C-->>GW: status / chunk / setCode
-    and Branch 2: backend spec
-        API->>SX: extract spec from image
-        SX-->>API: JSON spec + open questions
-    end
-    API-->>UI: spec ready (frontend may still be running)
-    UI->>API: PUT /api/projects/:id/spec (approve + answers)
-    API->>GW: GET /v1/generations/:jobId (poll)
-    GW-->>API: { status: done, html }
-    UI->>API: POST /api/projects/:id/build
-    API->>API: Template Generator → backend files
-    API->>API: Reconciler → match fields, wire fetch() calls
-    API-->>UI: download app.zip
+    state BUILDING {
+        [*] --> FE_BUILDING
+        [*] --> BE_BUILDING
+        FE_BUILDING --> FE_READY: Laptop B finished
+        BE_BUILDING --> BE_READY: templates finished
+    }
+
+    BUILDING --> SYNCED: Sync Barrier passes (same contractHash)
+    SYNCED --> INTEGRATING: Wirer connects HTML to API
+    INTEGRATING --> VERIFYING
+    VERIFYING --> REPAIRING: check failed (max 2 tries)
+    REPAIRING --> VERIFYING
+    VERIFYING --> READY: all checks pass
+    READY --> PREVIEW_LIVE: user clicks Preview
+    READY --> SHIPPED: user clicks Push to GitHub
+    PREVIEW_LIVE --> SHIPPED
+    VERIFYING --> NEEDS_ATTENTION: still failing after repairs
 ```
 
-1. **Upload.** The developer uploads one screenshot. We hash it with SHA-256, so the same image never pays for AI twice.
-2. **Fan-out.** The Builder API starts both branches at once.
-   - **Branch 1:** sends the image to the Gateway on Laptop B, which drives Screenshot-to-Code.
-   - **Branch 2:** sends the image to our local vision model, which returns a **JSON spec**.
-3. **Human review (hides the waiting time).** The spec usually finishes first. The developer reviews fields, rules and permissions **while** the frontend is still generating.
-4. **Fan-in.** Once the frontend HTML is ready *and* the spec is approved, the Template Generator writes the backend and the Wirer connects the HTML to it.
-5. **Download.** The developer gets a zip and runs it on their own machine.
+**Step by step:**
+
+| Step | Where | What happens | Typical time* |
+|---|---|---|---|
+| 1. Upload | A | Hash the image (SHA-256), shrink it to at most 1280 px wide, save it | instant |
+| 2. Contract draft | A | Vision model → Contract JSON (§4), forced to match a schema | seconds |
+| 3a. Frontend build | **B** | Gateway → Screenshot-to-Code with **image + Contract instructions** → `index.html` | the slow part |
+| 3b. Backend build | A | Templates fill in from the Contract → Express + Mongoose code + tests | instant |
+| 3c. Human review | User | Reviews and edits the Contract and answers open questions **while 3a runs** | in parallel |
+| 4. Sync Barrier | A | Proceed only if both artifacts match the current Contract hash | instant |
+| 5. Integrate | A | Wirer replaces sample data with API calls and hooks up the action buttons | instant |
+| 6. Verify | A (sandbox) | Contract check + API tests + browser smoke test (§7) | under a minute |
+| 7. Preview / Ship | A | Live preview link, zip download, or **push to GitHub** | seconds |
+
+\* Measure the real times in Checkpoints 1–2; don't promise numbers before then.
+
+### What if the user edits the Contract mid-build?
+
+Each edit creates **Contract version N+1** with a new hash. The Barrier then **refuses** any artifact built for version N, and the right part is rebuilt:
+
+| Kind of edit | Backend | Frontend |
+|---|---|---|
+| Rename a label, change validation or rules | Regenerate (instant, free) | Wirer patches the labels. No AI call |
+| Add or remove a field or action | Regenerate (instant) | Gateway job with `generationType: "update"`: Screenshot-to-Code edits the existing HTML |
 
 ---
 
-## 5. Components
-
-### 5.1 S2C Gateway (Laptop B, ours, about 150 lines of Node/Express)
-
-The Gateway exists because Screenshot-to-Code has **no REST API**. It has one internal WebSocket, `/generate-code`, which streams `status`, `chunk`, `setCode`, `variantComplete` and `error` messages. The Gateway hides that behind a simple contract:
-
-| Method | Path | Does |
-|---|---|---|
-| `POST` | `/v1/generations` | Upload an image; returns `202 { jobId }` |
-| `GET` | `/v1/generations/:id` | `{ status: queued \| running \| done \| failed, progress, html?, error? }` |
-| `GET` | `/v1/health` | Is Screenshot-to-Code up? Is the model loaded? |
-
-Rules:
-- **Auth:** every request needs the `X-API-Key` header. The key lives in `.env` on both laptops.
-- **Concurrency of 1:** a simple in-memory queue. One local model can't usefully serve two big jobs at once.
-- **Cache by image hash:** the same screenshot returns the saved HTML instantly.
-- **Stable contract:** if Screenshot-to-Code changes its WebSocket messages, only the Gateway changes. Laptop A never notices. This is the **Adapter pattern**.
-- **Fixed request settings:** `react_tailwind`, image generation **off**, asset extraction **off** (both are request parameters). This makes it faster and keeps it offline.
-
-### 5.2 Builder API (Laptop A, ours, Node + Express + MongoDB)
-
-| Method | Path | Does |
-|---|---|---|
-| `POST` | `/api/projects` | Upload a screenshot and start **both** branches |
-| `GET` | `/api/projects/:id` | Status of each branch, plus the spec and HTML when ready |
-| `PUT` | `/api/projects/:id/spec` | Developer edits or approves the spec and answers open questions |
-| `POST` | `/api/projects/:id/build` | Fan-in: generate the backend and wire the frontend |
-| `GET` | `/api/projects/:id/download` | Download `app.zip` |
-
-### 5.3 Spec Extractor (Laptop A, ours, the AI part)
-
-It sends the screenshot to the local vision model with a **JSON Schema**. Ollama's structured-output mode (`format` on `/api/chat`) forces the model to return valid JSON in exactly this shape:
+## 4. The Contract (the "sync language" between the laptops)
 
 ```json
 {
-  "resource": "employee",
+  "version": 2,
+  "resource": { "name": "employee", "plural": "employees", "label": "Employees" },
   "fields": [
     { "name": "fullName",   "label": "Full Name",  "type": "string", "required": true },
     { "name": "email",      "label": "Email",      "type": "email",  "required": true, "unique": true },
-    { "name": "department", "label": "Department", "type": "enum",   "options": ["HR", "Engineering"] },
-    { "name": "salary",     "label": "Salary",     "type": "number" }
+    { "name": "department", "label": "Department", "type": "enum",   "options": ["HR", "Engineering", "Sales"] },
+    { "name": "salary",     "label": "Salary",     "type": "number", "min": 0 }
   ],
   "actions": ["list", "create", "update", "delete", "search"],
-  "openQuestions": [
-    "Should delete be permanent or a soft delete?",
-    "Who is allowed to delete employees?"
-  ]
+  "rules": { "delete": "soft", "auth": "none" },
+  "openQuestions": ["Who may delete employees?"],
+  "ui": { "sampleConst": "SAMPLE_EMPLOYEES" }
 }
 ```
 
-Why this is good AI design, not a gimmick: the model does the one thing code *can't* do (understand a picture). It gives a **small, checkable** answer, and it **asks** instead of guessing business rules.
+**How the Contract keeps both sides aligned:**
 
-### 5.4 Template Generator (Laptop A, ours, no AI)
-
-The approved spec goes into fixed templates for `model.js` (Mongoose), `routes.js`, `controller.js`, `validation.js`, `server.js` and `.env.example`.
-
-- Same spec in → same code out. It's instant, free and testable.
-- Every generated line comes from a template **we wrote and can explain**.
-
-### 5.5 Reconciler + Wirer (Laptop A, ours, mostly no AI)
-
-1. Pull the JSX out of the `<script type="text/babel">` block in the generated `index.html`.
-2. Parse it with `@babel/parser` and find table headers, inputs, buttons and **hard-coded sample arrays**.
-3. **Reconcile:** match the frontend's labels to spec fields. For example, "Full Name" maps to `fullName` after normalising and fuzzy matching. Show any mismatch to the developer.
-4. **Wire:** replace the hard-coded array with a `fetch('/api/employees')` call, and connect the Add, Edit and Delete buttons.
-5. **Check:** parse again to make sure the JSX is still valid. Only if a pattern isn't recognised does a small local model do a narrow edit, and that edit is checked again.
-
----
-
-## 6. Local-LLM strategy (free and fast)
-
-### 6.1 Which model for which job
-
-| Job | Where | Model (start here) | Why |
-|---|---|---|---|
-| Screenshot → spec JSON | Laptop A (16 GB) | **`qwen3-vl:8b`** (already installed, about 6 GB) | Strong small vision model; fits in 16 GB with room left over |
-| Screenshot → HTML (Screenshot-to-Code) | Laptop B | Depends on Laptop B's memory (table below) | Writing long code is the heaviest job, so give it the bigger machine |
-| Fallback narrow edits in the Wirer | Laptop A | The same `qwen3-vl:8b`, already loaded | Don't load a second model on 16 GB |
-
-**Laptop B model by memory:**
-
-| Laptop B memory | Suggested model | Note |
+| The Contract says | Laptop B (frontend) is told to | Laptop A (backend) generates |
 |---|---|---|
-| 8–16 GB | `qwen3-vl:8b` | Works, but the HTML will be simpler than cloud quality |
-| 24–32 GB | A larger vision model, such as the Gemma 4 or Qwen 3.x vision family, in 4-bit | Check that Ollama supports its **vision** part. Some newer models need llama.cpp or LM Studio for vision |
-| 32 GB+ / NVIDIA GPU | The largest vision model that fits | Fastest and best quality |
+| field `fullName` | label a column "Full Name" with `data-field="fullName"`, and a form input `name="fullName"` | Mongoose field `fullName: { type: String, required: true }` + validation |
+| action `create` | add an "Add Employee" button with `data-action="create"` | `POST /api/employees` |
+| action `delete` | add per-row Delete buttons with `data-action="delete"` | `DELETE /api/employees/:id` (soft delete) |
+| `ui.sampleConst` | keep the sample rows in `const SAMPLE_EMPLOYEES = [...]` | the Wirer replaces exactly that constant with a `fetch` call |
 
-> **How Screenshot-to-Code uses a local model:** it sets `OPENAI_BASE_URL=http://localhost:11434/v1` (Ollama's OpenAI-compatible endpoint). With only an OpenAI key set, it requests a model named `gpt-5.5`, so we create an Ollama alias with that name that points at the real local model. **This must be tested.** Screenshot-to-Code calls the OpenAI **Responses API** with streaming and **tool calls** (`create_file`, `edit_file`). Small local models are often weak at tool calling, and Ollama's support for streaming tool calls on `/v1/responses` isn't confirmed.
+Because the markers are agreed in advance, the Wirer and Verifier don't have to guess. They look for `data-field`, `data-action` and `SAMPLE_EMPLOYEES` in the code tree.
 
-### 6.2 Speed techniques, in order of impact
+---
 
-| # | Technique | Why it's faster | Effort |
+## 5. Laptop B: UI Worker (RTX 4060 8 GB)
+
+### 5.1 What runs
+
+- **Ollama (CUDA)** with `qwen3-vl:8b` (about 6.1 GB at 4-bit), aliased as `gpt-5.5`.
+  - **The model must fit entirely in the 8 GB of VRAM.** If part of it spills to the CPU it becomes several times slower.
+  - Check with `ollama ps`: the PROCESSOR column must say `100% GPU`.
+  - If it doesn't fit, lower the context length, or switch to `qwen3-vl:4b`.
+- **Screenshot-to-Code** pinned at commit `a813977`, with **a 2-line patch** (documented, not a fork):
+  - `NUM_VARIANTS = 1` in `config.py` (default 4).
+  - The update-mode variant count set to 1 in `routes/generate_code.py` (hard-coded 2).
+  - It runs in **non-production mode**, which it needs to accept a custom model address (`openAiBaseURL`).
+  - **No API keys in its `.env`.** The Gateway passes keys per request (see 5.3).
+- **S2C Gateway** (ours, Node/Express): the only service other laptops can reach.
+
+### 5.2 GPU speed settings (Ollama environment)
+
+| Setting | Value | Why |
+|---|---|---|
+| `OLLAMA_FLASH_ATTENTION` | `1` | Faster attention, less VRAM |
+| `OLLAMA_KV_CACHE_TYPE` | `q8_0` | Halves the memory needed for long prompts, so the model stays fully on the GPU |
+| `OLLAMA_KEEP_ALIVE` | `-1` | Model stays loaded; no cold start |
+| `OLLAMA_NUM_PARALLEL` | `1` | One job at a time gets the whole GPU |
+| `OLLAMA_MAX_LOADED_MODELS` | `1` | No second model competing for 8 GB |
+| Context length | 16k to start | Screenshot-to-Code's prompts are long; tune it while watching `ollama ps` |
+
+### 5.3 Gateway API (Laptop B)
+
+| Method | Path | Body / Result |
+|---|---|---|
+| `POST` | `/v1/generations` | `{ image, instructions, contractHash, type: create\|update, baseHtml?, mode: auto\|local\|cloud }` → `202 { jobId }` |
+| `GET` | `/v1/generations/:id` | `{ status, progress, provider: local\|cloud, contractHash, html?, error? }` |
+| `POST` | `/v1/generations/:id/cancel` | Stops a job that is out of date (an old Contract version) |
+| `GET` | `/v1/health` | `{ s2cUp, modelLoaded, gpu: "100% GPU", queueLength, s2cCommit }` |
+
+**How the Gateway switches between local and cloud per request.** Screenshot-to-Code reads keys and the model address from each WebSocket message (verified in its source):
+
+- **Local mode:** sends `openAiApiKey: "ollama"` and `openAiBaseURL: "http://localhost:11434/v1"`. Screenshot-to-Code asks for "gpt-5.5", and Ollama serves our local model.
+- **Cloud mode:** sends only `geminiApiKey: <backup key>`. Screenshot-to-Code picks Gemini automatically.
+- **No restart is needed to switch.**
+
+Other Gateway rules:
+- `X-API-Key` on every call.
+- A queue with one job at a time.
+- Idempotency: the same `(imageHash, contractHash, type)` returns the same job, so retries are safe.
+- Output cache by that same key.
+
+---
+
+## 6. Laptop A: Orchestrator (M5, 16 GB)
+
+| Component | Job | AI? |
+|---|---|---|
+| **Builder API + Orchestrator** | Runs the state machine (§3), polls B every 2 s, enforces the Barrier, serves the UI | No |
+| **Contract Extractor** | Image → Contract JSON using Ollama's **structured output** (`format` = JSON Schema), `think: false` | **Yes** (local `qwen3-vl:8b`, cloud backup) |
+| **Provider Router** | For each AI step: local first; switch to cloud on error, timeout or invalid output; daily cloud budget cap | No |
+| **Backend Generator** | Contract → Express + Mongoose code + generated tests, from templates we wrote | No |
+| **Wirer** | Babel AST: replace `SAMPLE_*` with `fetch`, connect `data-action` buttons, add loading and error states | No (narrow AI fallback only) |
+| **Verifier** | Runs the checks in §7 inside the sandbox | No |
+| **Preview Runner** | Docker sandbox (§8) | No |
+| **GitHub Publisher** | Creates the repo and pushes one commit (§9) | No |
+
+**The Provider Router's policy, the same on both laptops:**
+
+```
+for each AI step:
+  try LOCAL  (timeout: Contract 90 s, UI 8 min)
+  if error / timeout / output fails the schema or markers check:
+      if cloudBudgetLeft > 0: retry with CLOUD, mark artifact.provider = "cloud"
+      else: NEEDS_ATTENTION
+"Demo mode" switch in the UI: force CLOUD for every step (most reliable for evaluation day).
+```
+
+The UI shows a badge on each artifact, such as **"built locally on GPU"** or **"cloud backup"**. That's honest, and it's a good talking point in the viva.
+
+---
+
+## 7. Verify before shipping
+
+| # | Check | How | If it fails |
 |---|---|---|---|
-| 1 | **LLM outputs a short spec; templates write the code** | Generation time grows with output length, so about 300 tokens instead of thousands | Design choice |
-| 2 | **Two branches in parallel, on two machines** | Total time is the slower branch, not the sum. No two models compete for one laptop's memory | Architecture |
-| 3 | **One variant instead of four** in Screenshot-to-Code | It generates 4 versions by default. Locally that's about **4× the time** | 1-line patch (`NUM_VARIANTS = 1` in `config.py`) |
-| 4 | **Structured outputs (JSON Schema)** | No broken JSON, so no retries | One request field |
-| 5 | **Thinking off** (`think: false`) for spec extraction | Reasoning models spend many hidden tokens "thinking". A spec doesn't need it | One request field |
-| 6 | **Keep models loaded** (`OLLAMA_KEEP_ALIVE=-1`) | Loading a 6 GB model from disk takes seconds on *every* cold request | Env variable |
-| 7 | **Resize screenshots** (for example to at most 1280 px wide) | Fewer image tokens, so faster reading of the prompt | A few lines |
-| 8 | **Cache by image hash** | The same screenshot costs 0 seconds the second time. It also protects the demo | A few lines |
-| 9 | **4-bit quantised models** (Ollama default, GGUF Q4_K_M or MLX 4-bit) | About ¼ the memory of full precision with a small quality loss, so the model fits and runs faster | Choose the right tag |
-| 10 | **Apple Silicon: newer Ollama with the MLX engine, or LM Studio/MLX** | MLX is reported faster than llama.cpp on M-series chips, especially larger models | Update Ollama, then benchmark |
-| 11 | **Stream progress to the UI** | Doesn't reduce time, but the app *feels* fast | Polling or SSE |
-| — | *Advanced, later:* **speculative decoding**, **MoE coder models** (for example Qwen3-Coder-30B-A3B, only about 3B "active" parameters) | Reported 1.5–3× faster generation, but MoE needs about 20 GB or more. Benchmark before adopting | Later |
+| 1 | **Frontend matches the Contract** | Babel AST: every Contract field has `data-field`, every action has `data-action`, and `SAMPLE_*` exists | **Repair:** Gateway `update` job asking for exactly the missing markers (max 2 tries, then cloud) |
+| 2 | **JSX still parses after wiring** | Re-parse with `@babel/parser` | Undo the wiring step and show the diff to the user |
+| 3 | **Backend boots** | Start it in the sandbox; `GET /health` returns 200 | Template bug, so fix the template (ours) |
+| 4 | **API behaves as the Contract says** | Generated tests (Jest + Supertest): create, list, update, delete, search, and a validation error | Same as above |
+| 5 | **Browser smoke test** | Headless Playwright: open the page → add a record → see it in the table → edit → delete | Mark NEEDS_ATTENTION and show a screenshot |
 
-**Ollama settings for both laptops:** `OLLAMA_KEEP_ALIVE=-1`, `OLLAMA_NUM_PARALLEL=1`, `OLLAMA_MAX_LOADED_MODELS=1`. Leave `OLLAMA_HOST` on localhost and never expose Ollama itself. Only the Gateway is reachable from outside.
-
-### 6.3 Fallback for quality (still free)
-
-If local HTML quality isn't good enough for the demo, **Screenshot-to-Code supports Gemini natively.** Put a **free-tier** `GEMINI_API_KEY` in Laptop B's `.env` and set no other key. That needs **no code changes**, and our Gateway contract stays exactly the same. Check the free-tier limits and data-use terms first: free tiers may use your inputs for training, so don't upload private client screenshots.
+Only a project whose checks all pass (status `READY`) can be previewed or pushed. The user can force a push, and the commit message then says that verification failed.
 
 ---
 
-## 7. Networking and security
+## 8. Live preview (sandbox)
 
-- **Connecting the laptops:** use **Tailscale** (free for personal use). Each laptop gets a stable private address, such as `http://laptop-b:8080`, that works across networks. College Wi-Fi often blocks laptop-to-laptop traffic, and Tailscale avoids that. On a home network, the LAN IP also works.
-- **Never port-forward** Screenshot-to-Code or Ollama to the internet. Screenshot-to-Code's CORS setting allows every origin.
-- **Exposed ports:**
-  - Laptop B exposes only the Gateway (for example `:8080`), with an API key.
-  - Screenshot-to-Code (`:7001`) and Ollama (`:11434`) stay on localhost.
-- **Generated code is untrusted:** the Builder never runs it. The developer runs the zip on their own machine. A Docker sandbox comes later.
-- **Secrets:** `.env` files are git-ignored; commit only `.env.example`.
+- **Why it's needed now:** you want the user to *see* the working app before pushing.
+- **Risk:** the backend comes from **our own templates**, so the server-side risk is low. The frontend HTML is model-generated, and it runs in the browser.
+- **Where:** a Docker sandbox on Laptop A (OrbStack or Docker Desktop on macOS).
+
+| Rule | Why |
+|---|---|
+| Two containers (app + mongo) on a private Docker network | The app can't reach our `builder_db` or the internet |
+| Memory limit (app 512 MB, mongo 512 MB), 1 CPU, non-root user, read-only filesystem | A runaway app can't take over the laptop |
+| **No secrets inside**: no GitHub token, no API keys | Nothing to steal |
+| Served on a **separate port**, so a different web origin (e.g. `:7100`), not our UI's origin | Generated JS can't read our UI's cookies |
+| Auto-stop after 30 min; one preview at a time | 16 GB of memory is shared with Ollama |
 
 ---
 
-## 8. Data (Laptop A, `builder_db`)
+## 9. Push to the user's GitHub
+
+### 9.1 Login and permissions
+- **"Sign in with GitHub"** (a GitHub **OAuth App**) is also *our product's* login, so one feature covers user accounts too.
+- **Ask for the minimum, and only when needed:**
+  - At login: `read:user`.
+  - When the user first clicks Publish: `public_repo` (or `repo` for private repos) plus `workflow`. `workflow` is required to push a `.github/workflows/` file.
+- **Token storage:** encrypted with AES-256-GCM in MongoDB, using a key from `.env`. It never leaves Laptop A, never goes to Laptop B, and never enters a sandbox.
+
+### 9.2 How the push works (GitHub REST API, no git commands on the server)
+1. The user picks a repo name and public or private.
+2. `POST /user/repos` creates a **new** repo. The MVP never overwrites an existing repo.
+3. Create one *blob* per file → one *tree* → one *commit* ("Initial app generated from screenshot") → update `refs/heads/main`.
+4. Show the repo link. GitHub Actions runs the included tests, so the user sees a green check.
+
+### 9.3 What the user receives
+
+```
+employee-app/
+├── README.md              how to run, the Contract, "generated by …" credits
+├── contract.json          the agreed Contract (version + hash)
+├── docker-compose.yml     app + mongo, one command to run
+├── .env.example
+├── frontend/
+│   ├── index.html         generated by Screenshot-to-Code, wired by us
+│   └── api.js             small fetch helper (ours, from a template)
+├── backend/
+│   ├── server.js          also serves frontend/, so same origin and no CORS problems
+│   ├── models/employee.model.js
+│   ├── routes/employee.routes.js
+│   ├── controllers/employee.controller.js
+│   └── validation/employee.validation.js
+├── tests/
+│   ├── api.test.js        generated from the Contract
+│   └── smoke.spec.js      Playwright browser test
+└── .github/workflows/ci.yml
+```
+
+---
+
+## 10. Networking and security summary
+
+| Item | Rule |
+|---|---|
+| Link between the laptops | **Tailscale** (free), so the private address works on any Wi-Fi, including college networks that block device-to-device traffic |
+| Exposed services | Laptop A: our UI/API. Laptop B: **only the Gateway**. Screenshot-to-Code `:7001` and Ollama `:11434` stay on localhost |
+| Laptop-to-laptop auth | `X-API-Key` header; key in `.env` on both laptops |
+| Secrets | `.env` git-ignored. Cloud key only on the machine that needs it. GitHub tokens encrypted, only on A |
+| Cloud cost | Daily cap in the Provider Router; demo screenshots cached |
+| Untrusted code | Runs only in the sandbox (§8), never with secrets |
+
+---
+
+## 11. Our database (`builder_db` on Laptop A)
 
 | Collection | Key fields |
 |---|---|
-| `projects` | `name`, `imageHash`, `imagePath`, `status`, `createdAt` |
-| `jobs` | `projectId`, `kind: ui \| spec \| build`, `status`, `progress`, `error`, `remoteJobId` (the Gateway's id), `startedAt`, `finishedAt` |
-| `specs` | `projectId`, `spec` (JSON above), `approved`, `answers` |
-| `artifacts` | `projectId`, `kind: html \| zip`, `path`, `s2cCommit`, `model` |
+| `users` | `githubId`, `login`, `avatarUrl`, `tokenEncrypted`, `scopes` |
+| `projects` | `userId`, `name`, `imageHash`, `state` (§3), `currentContractVersion` |
+| `contracts` | `projectId`, `version`, `hash`, `body` (§4), `approved`, `answers` |
+| `jobs` | `projectId`, `kind: contract\|frontend\|backend\|verify\|preview\|publish`, `status`, `provider`, `contractHash`, `remoteJobId`, `error`, timestamps |
+| `artifacts` | `projectId`, `kind: html\|backend\|zip`, `contractHash`, `path`, `provider`, `model` |
+| `publishes` | `projectId`, `repoFullName`, `commitSha`, `verified`, `createdAt` |
 
-> Our product's database (`builder_db`) is **separate** from the generated app's database (for example `employee_app`), whose connection string goes into the generated `.env`.
-
----
-
-## 9. Build order (one checkpoint at a time)
-
-| # | Checkpoint | Done when |
-|---|---|---|
-| 1 | **Local-model spike on Laptop B** | Screenshot-to-Code + Ollama alias + 1-variant patch produces *any* working `index.html`. **This decides whether the local-only plan holds** |
-| 2 | **Spec Extractor spike on Laptop A** | `qwen3-vl:8b` turns 3 screenshots into valid spec JSON. Time each run |
-| 3 | Gateway | `curl` can POST an image to Laptop B over Tailscale and GET the HTML |
-| 4 | Builder API skeleton | Projects, jobs, MongoDB; both branches start in parallel |
-| 5 | Template Generator | Approved spec → backend that passes CRUD tests |
-| 6 | Reconciler + Wirer | Generated HTML talks to the generated backend |
-| 7 | Our UI + demo | Upload → review spec → download → working CRUD app |
+> This database holds **our product's** data. The generated app has its **own** database (`employee_app`), set in its own `.env`.
 
 ---
 
-## 10. Risks
+## 12. Build plan (one checkpoint at a time)
+
+| # | Checkpoint | Done when | Owner |
+|---|---|---|---|
+| 1 | **Laptop B GPU spike** | Ollama shows `100% GPU`. Screenshot-to-Code (patched) + local model + **Contract instructions** produces HTML containing the `data-field` markers. The cloud-key path is also tested | A |
+| 2 | **Contract Extractor spike (A)** | 3 screenshots → valid Contract JSON; time each run; cloud backup works | B |
+| 3 | **Gateway + link between the laptops** | `curl` from A over Tailscale: POST an image, poll, get the HTML; `/v1/health` works | A |
+| 4 | **Orchestrator + state machine + Barrier** | Upload → both branches run → Barrier rejects a mismatched hash in a test | B |
+| 5 | **Backend Generator + generated tests** | Contract → backend whose generated tests pass | C |
+| 6 | **Wirer + Verifier + repair loop** | Wired HTML talks to the backend; checks 1–4 pass | C |
+| 7 | **Sandbox preview + Playwright smoke** | Preview link works and auto-stops; check 5 passes | D |
+| 8 | **GitHub login + Publish** | A new repo appears in the user's account, and its CI turns green | D |
+| 9 | **UI + demo rehearsal** | Full run end to end, with demo mode, a cache, and a backup video | All |
+
+**Team roles:** A = Laptop B / Gateway · B = Orchestrator / Contract · C = Generator / Wirer / Verifier · D = Sandbox / GitHub / UI.
+
+---
+
+## 13. Risks
 
 | Risk | Level | Mitigation |
 |---|---|---|
-| Small local models fail Screenshot-to-Code's **tool-calling agent** loop (empty or broken output) | **High** | Checkpoint 1 tests this first. Fallback: a bigger model on Laptop B, or the Gemini free tier (§6.3) |
-| Ollama's `/v1/responses` doesn't handle a request field Screenshot-to-Code sends (`reasoning`, streaming tools) | Medium | Test in Checkpoint 1. If needed, put a tiny translating proxy in front of Ollama or use LM Studio's server |
-| Local HTML quality is lower than cloud | Medium | Keep demo screenshots simple (one table + one form). Our backend side doesn't depend on HTML quality |
-| 16 GB on Laptop A is tight | Medium | One model loaded, `qwen3-vl:8b` only. Close heavy apps while demoing |
-| Spec fields don't match frontend labels | Medium | The Reconciler shows a mapping table and the developer fixes mismatches |
-| Laptop B offline during the demo | Low | `/v1/health` check plus cached results for the demo screenshots |
+| Small local model doesn't follow the marker instructions, or fails Screenshot-to-Code's tool-calling loop | **High** | Checkpoint 1 tests it first; repair loop; Provider Router falls back to cloud |
+| `qwen3-vl:8b` + long prompts don't fit in 8 GB of VRAM, so it slows down a lot | Medium | Q8 KV cache, flash attention, smaller context, or `qwen3-vl:4b` |
+| Ollama doesn't accept a Responses API field that Screenshot-to-Code sends | Medium | Found in Checkpoint 1; the Gateway can use cloud mode while it's fixed |
+| 16 GB on Laptop A: Ollama + MongoDB + Docker sandbox | Medium | One preview at a time, memory limits, unload the model before previews if needed |
+| GitHub push of the workflow file rejected | Low | Request the `workflow` scope, or skip CI if the user declines |
+| Laptop B offline on demo day | Low | Health indicator, cached results, demo mode (cloud), recorded backup video |
+| Cloud bill | Low | Daily cap + cache + local-first |
 
 ---
 
-## 11. Viva cheat-sheet
+## 14. Demo-day runbook
 
-- **Why two laptops?** Local models are memory-bound. Splitting by job gives real parallelism, and nothing competes for one machine's memory.
-- **Why a Gateway?** Screenshot-to-Code only has an internal WebSocket. The Gateway gives a stable REST contract and hides changes (Adapter pattern).
-- **Why does the backend start from the image and not wait for the frontend?** Parallelism: total time is the slower branch, and the human review happens during the wait.
-- **Where exactly is the AI?** Two places: understanding the screenshot into a spec (our pipeline), and generating the UI (Screenshot-to-Code). Code generation for the backend is deliberately **not** AI, so it's reliable and explainable.
-- **How is it fast without paid APIs?** Small outputs, structured JSON, one variant, models kept loaded, 4-bit quantisation, caching and parallel machines.
-- **How is it safe?** Only the Gateway is exposed, with an API key over a private network, and generated code never runs on our servers.
+1. The day before: run all demo screenshots once, so the cache is warm.
+2. Both laptops on Tailscale; check `/v1/health` → `100% GPU`.
+3. Turn on **Demo mode** if the room's network or time is unreliable.
+4. Flow to show: upload → Contract appears in seconds → edit one rule while the frontend builds → Barrier turns green → checks pass → live preview: add and delete an employee → **Push to GitHub** → open the repo and show the green CI.
 
 ---
 
-## 12. Open decisions
+## 15. Viva cheat-sheet
 
-1. **Laptop B's specs** (memory, and whether it has an NVIDIA GPU) decide its model.
-2. Confirm what the `gpt-5.5:latest` Ollama model on Laptop A was built from.
-3. Local-only, or local with a Gemini free-tier fallback for the demo?
+- **How are the laptops kept in sync?** A shared, versioned Contract; every artifact is stamped with its hash; and a Barrier that only proceeds when the hashes match. A orchestrates, B is a stateless worker, and A always initiates calls.
+- **How do you know the frontend matches the backend?** The frontend is *instructed* with the Contract's field names and markers. We *verify* this by parsing the code, and *repair* it automatically if needed.
+- **Where is the AI?** Reading the screenshot into a Contract, and generating the UI. The backend is template-generated on purpose, so it's predictable and explainable.
+- **Why local plus a cloud backup?** Free and private by default; reliable when it matters. The Provider Router decides per step and records which one was used.
+- **How is it fast?** GPU fully loaded, one variant, short structured AI outputs, parallel laptops, the human review overlapping the build, and caching.
+- **How is it safe?** Minimal GitHub scopes, encrypted tokens, sandboxed previews without secrets, only the Gateway exposed, and an API key between the laptops.
 
 ---
 
-### Sources
-- Screenshot-to-Code source, read directly at commit `a813977`: WebSocket `/generate-code`, `NUM_VARIANTS = 4`, `OPENAI_BASE_URL`, Responses API with tool calls, model sets.
-- [Best Local Vision Models 2026 (promptquorum)](https://www.promptquorum.com/power-local-llm/local-vision-models-llava-ollama-2026) · [Vision models every GPU tier (insiderllm)](https://insiderllm.com/guides/vision-models-locally/) · [Run Vision Models Locally with Ollama 2026](https://vucense.com/dev-corner/run-vision-models-locally-ollama-2026/)
-- [Ollama: streaming responses with tool calling](https://registry.ollama.ai/blog/streaming-tool) · [Agno: Ollama Responses API](https://docs.agno.com/examples/models/ollama/responses/overview)
-- [MLX vs llama.cpp on Apple Silicon, M5 (yage.ai)](https://yage.ai/share/mlx-apple-silicon-en-20260331.html) · [Apple Silicon inference optimisation guide](https://blog.starmorph.com/blog/apple-silicon-llm-inference-optimization-guide) · [llama.cpp vs MLX 2026](https://www.local-llm.net/compare/llama-cpp-vs-mlx/)
+## 16. Open decisions
+
+1. **Laptop B's operating system** (Windows or Linux)? It affects the install steps, not the design.
+2. **Which backup key?** Recommended: **Gemini**, because Screenshot-to-Code supports it natively and it has a free tier. OpenAI or Anthropic keys also work.
+3. Allow **private** repos in the MVP? That needs the broader `repo` scope.
+
+### Verified facts used here (Screenshot-to-Code @ `a813977`)
+- Each WebSocket request accepts `openAiApiKey`, `anthropicApiKey`, `geminiApiKey` and `openAiBaseURL` (the last one only in non-production mode).
+- Image mode uses `prompt.text` as extra instructions alongside the image.
+- `NUM_VARIANTS = 4`; update mode is hard-coded to 2 variants.
+- It uses the OpenAI Responses API with tool calls (`create_file`, `edit_file`).
