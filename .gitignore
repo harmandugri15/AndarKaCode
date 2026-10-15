@@ -1,0 +1,17 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.log
+
+# Secrets: only the .example files are committed
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated apps and job workspaces (Builder API output)
+runs/

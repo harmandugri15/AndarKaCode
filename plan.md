@@ -3,7 +3,7 @@
 > **Design:** see [ARCHITECTURE.md](ARCHITECTURE.md) (v2, approved). This file is our **step-by-step to-do list**.
 > **Rule:** do one step, report back, then move on. Tick the box when its "Done when" is true.
 
-**Current step:** ▶ **Step 4: Contract Extractor experiment (Laptop A)**
+**Current step:** ▶ **Step 6: Gateway on Laptop B**
 
 ---
 
@@ -24,11 +24,11 @@ Every step has four parts:
 - [x] **Step 1: Ollama on Laptop B's GPU.** ✅ 14 Oct: runs well on the GPU; correctly identified the screenshot's columns and buttons. Install Ollama, pull `qwen3-vl:8b`, and confirm it runs **100% on the GPU**.
 - [x] **Step 2: Screenshot-to-Code on Laptop B (local model).** ✅ 15 Oct: works with local `qwen3-vl:8b` (alias `gpt-5.5`), about 60–70% match, **over 5 min** per page. Run it with Ollama behind it, apply the 1-variant patch, generate one dashboard through *its own* UI, and capture the WebSocket messages in DevTools.
 - [x] **Step 3: Contract instructions + backup key.** ✅ 15 Oct: local 3 min 38 s, Gemini 30 s. All `data-field` markers present in both; local missed `data-action="create"`; one output had no `SAMPLE_EMPLOYEES`. Send field names and `data-field` / `data-action` markers as text with the image, and check they appear in the HTML. Try the cloud key path once.
-- [ ] **Step 4: Contract Extractor experiment (Laptop A).** A small Node script: screenshot → Ollama → valid Contract JSON. Time it.
+- [x] **Step 4: Contract Extractor experiment (Laptop A).** ✅ 15 Oct: Laptop B 12 s, Mac 20.1 s, all checks passed (`employees.png`). More screenshots and `--cloud` still to try. A small Node script: screenshot → Ollama → valid Contract JSON. Time it.
 
 ## Phase 2: Connect the two laptops
 
-- [ ] **Step 5: Project repo skeleton.** One Git repo for both laptops: folders for `gateway/`, `builder-api/`, `web/`, `templates/`, `spikes/`, `samples/`, plus `.gitignore` and `.env.example`.
+- [x] **Step 5: Project repo skeleton.** ✅ 15 Oct: folders, root README, `.gitignore`, one `.env.example` per service. One Git repo for both laptops: folders for `gateway/`, `builder-api/`, `web/`, `templates/`, `spikes/`, `samples/`, plus `.gitignore` and `.env.example`.
 - [ ] **Step 6: Gateway on Laptop B.** Our first real service: `POST /v1/generations`, `GET /v1/generations/:id`, `GET /v1/health`, with an API key and a queue.
 - [ ] **Step 7: Tailscale + first call between the laptops.** `curl` from Laptop A → Gateway on B → HTML comes back.
 
@@ -63,3 +63,5 @@ Every step has four parts:
 | 15 Oct 2026 | Frontend style: **`html_tailwind`**. The Wirer must not depend on `SAMPLE_*` (models sometimes skip it): render rows from the first `data-field` table row. A missing `data-action` goes to the repair step. |
 | 15 Oct 2026 | S2C picks Ollama over Gemini when an OpenAI key is in its `.env`, so the Gateway's cloud mode needs that key removed from `.env`. |
 | 15 Oct 2026 | Contract Extractor: use **`qwen3-vl:8b-instruct`** (the thinking variant returns empty `content` with structured output). Test on Laptop B: 12 s, correct Contract. Enum options only list values visible in the screenshot, so the user should review them. |
+| 15 Oct 2026 | Contract Extractor on the Mac: 20.1 s, all checks passed. Still untested: other screenshots, Gemini `--cloud` path. |
+| 15 Oct 2026 | Repo: one `.env.example` per service (each runs on a different laptop). Gateway port 8787, Builder API port 4000. `1.html` moved to `samples/step3-cloud.html`. |
