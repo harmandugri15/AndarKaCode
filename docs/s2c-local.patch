@@ -1,0 +1,190 @@
+diff --git a/backend/agent/engine.py b/backend/agent/engine.py
+index 11ead96..57e7b23 100644
+--- a/backend/agent/engine.py
++++ b/backend/agent/engine.py
+@@ -216,7 +216,7 @@ class AgentEngine:
+             self._mark_preview_length(tool_event_id, len(content))
+ 
+     async def _run_with_session(self, session: ProviderSession) -> str:
+-        max_steps = 30
++        max_steps = 6  # local patch: bound agent loops (S2C keeps running after a client disconnects)
+ 
+         for _ in range(max_steps):
+             assistant_event_id = self._next_event_id("assistant")
+diff --git a/backend/agent/providers/gemini.py b/backend/agent/providers/gemini.py
+index 69a38be..a4895af 100644
+--- a/backend/agent/providers/gemini.py
++++ b/backend/agent/providers/gemini.py
+@@ -1,4 +1,5 @@
+ # pyright: reportUnknownVariableType=false
++import asyncio
+ import base64
+ import copy
+ import uuid
+@@ -8,6 +9,7 @@ from dataclasses import dataclass, field
+ from typing import Any, Dict, List, Optional, cast
+ 
+ from google import genai
++from google.genai import errors as genai_errors
+ from google.genai import types
+ from openai.types.chat import ChatCompletionMessageParam
+ 
+@@ -28,6 +30,10 @@ from llm import Llm
+ 
+ DEFAULT_VIDEO_FPS = 10
+ 
++# Backoff for transient Gemini server errors (e.g. 503 "high demand").
++_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}
++_TRANSIENT_RETRY_DELAYS_S = (2, 5, 10)
++
+ 
+ def serialize_gemini_tools(tools: List[CanonicalToolDefinition]) -> List[types.Tool]:
+     declarations = [
+@@ -342,11 +348,25 @@ class GeminiProviderSession(ProviderSession):
+                 "gemini", api_model_name, request_payload
+             )
+ 
+-        stream = await self._client.aio.models.generate_content_stream(
+-            model=api_model_name,
+-            contents=cast(Any, self._contents),
+-            config=config,
+-        )
++        # Gemini intermittently returns 503 "high demand" when a request is
++        # opened. Nothing has streamed yet at that point, so retrying is safe
++        # and avoids discarding a run that has already produced code.
++        for delay in (*_TRANSIENT_RETRY_DELAYS_S, None):
++            try:
++                stream = await self._client.aio.models.generate_content_stream(
++                    model=api_model_name,
++                    contents=cast(Any, self._contents),
++                    config=config,
++                )
++                break
++            except genai_errors.ServerError as e:
++                if delay is None or e.code not in _TRANSIENT_STATUS_CODES:
++                    raise
++                print(
++                    f"[gemini] {api_model_name} returned {e.code}; "
++                    f"retrying in {delay}s"
++                )
++                await asyncio.sleep(delay)
+ 
+         state = GeminiParseState()
+         turn_usage: TokenUsage | None = None
+diff --git a/backend/agent/providers/openai.py b/backend/agent/providers/openai.py
+index cd7d7a6..6e75641 100644
+--- a/backend/agent/providers/openai.py
++++ b/backend/agent/providers/openai.py
+@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
+ 
+ from PIL import Image
+ 
+-from openai import AsyncOpenAI
++from openai import AsyncOpenAI, BadRequestError
+ from openai.types.chat import ChatCompletionMessageParam
+ 
+ from agent.providers.base import (
+@@ -504,6 +504,9 @@ class OpenAIProviderSession(ProviderSession):
+         self._max_patches = _get_max_patches_for_model(model)
+         # Prompt images are fitted on the first turn, where we can await.
+         self._prompt_images_fitted = self._max_patches is None
++        # Set once an OpenAI-compatible server (e.g. Ollama serving a
++        # non-thinking model) rejects the `reasoning` param.
++        self._reasoning_unsupported = False
+ 
+     async def _fit_prompt_images(self) -> None:
+         if self._prompt_images_fitted or self._max_patches is None:
+@@ -533,7 +536,7 @@ class OpenAIProviderSession(ProviderSession):
+         if model_name == "gpt-5.4-2026-03-05":
+             params["prompt_cache_retention"] = "24h"
+         reasoning_effort = get_openai_reasoning_effort(self._model)
+-        if reasoning_effort:
++        if reasoning_effort and not self._reasoning_unsupported:
+             params["reasoning"] = {"effort": reasoning_effort, "summary": "auto"}
+ 
+         self._prompt_report_logger.record_request(params)
+@@ -541,7 +544,17 @@ class OpenAIProviderSession(ProviderSession):
+             self._recorder.record_llm_request("openai", model_name, params)
+ 
+         state = OpenAIResponsesParseState()
+-        stream = await self._client.responses.create(**params)  # type: ignore
++        try:
++            stream = await self._client.responses.create(**params)  # type: ignore
++        except BadRequestError as e:
++            if "reasoning" not in params or "support thinking" not in str(e):
++                raise
++            # Local OpenAI-compatible servers reject `reasoning` for models
++            # without thinking support; retry (and continue) without it.
++            print(f"[openai] {model_name} does not support reasoning; retrying without it")
++            self._reasoning_unsupported = True
++            del params["reasoning"]
++            stream = await self._client.responses.create(**params)  # type: ignore
+         async for event in stream:  # type: ignore
+             await parse_event(event, state, on_event)
+ 
+diff --git a/backend/config.py b/backend/config.py
+index 6631629..5dbb548 100644
+--- a/backend/config.py
++++ b/backend/config.py
+@@ -1,6 +1,6 @@
+ import os
+ 
+-NUM_VARIANTS = 4
++NUM_VARIANTS = 1
+ NUM_VARIANTS_VIDEO = 2
+ 
+ # LLM-related
+diff --git a/backend/main.py b/backend/main.py
+index bc10e81..ec113ed 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -3,6 +3,15 @@ from dotenv import load_dotenv
+ 
+ load_dotenv()
+ 
++import io
++import sys
++
++# On Windows, stdout/stderr fall back to cp1252 when piped or redirected, and
++# printing box-drawing/emoji characters (e.g. the prompt preview) raises
++# UnicodeEncodeError mid-request. Force UTF-8 so logging can never crash.
++for _stream in (sys.stdout, sys.stderr):
++    if isinstance(_stream, io.TextIOWrapper):
++        _stream.reconfigure(encoding="utf-8", errors="replace")
+ 
+ from fastapi import FastAPI
+ from fastapi.middleware.cors import CORSMiddleware
+diff --git a/backend/routes/generate_code.py b/backend/routes/generate_code.py
+index 091874b..ccfdcae 100644
+--- a/backend/routes/generate_code.py
++++ b/backend/routes/generate_code.py
+@@ -424,7 +424,7 @@ class ModelSelectionStage:
+     ) -> List[Llm]:
+         """Select appropriate models based on available API keys"""
+         try:
+-            num_variants = 2 if generation_type == "update" else NUM_VARIANTS
++            num_variants = 1 if generation_type == "update" else NUM_VARIANTS
+             variant_models = self._get_variant_models(
+                 generation_type,
+                 input_mode,
+diff --git a/backend/start.py b/backend/start.py
+index ae847ca..ede4187 100644
+--- a/backend/start.py
++++ b/backend/start.py
+@@ -1,5 +1,6 @@
+ import argparse
+ import socket
++import sys
+ 
+ import uvicorn
+ 
+@@ -37,4 +38,8 @@ if __name__ == "__main__":
+     if port != args.port:
+         print(f"Port {args.port} is in use. Starting backend on port {port}.")
+ 
+-    uvicorn.run("main:app", host=args.host, port=port, reload=True)
++    # With reload on Windows, uvicorn's default loop setup forces the Selector
++    # event loop, which can't spawn subprocesses (breaks Playwright). "none"
++    # keeps Python's default Proactor loop.
++    loop = "none" if sys.platform == "win32" else "auto"
++    uvicorn.run("main:app", host=args.host, port=port, reload=True, loop=loop)

@@ -11,7 +11,8 @@ export function providerParams(mode, { ollamaUrl, geminiApiKey }) {
 }
 
 /**
- * Resolves with { html } when S2C finishes; rejects on any S2C error, early close or timeout.
+ * Resolves with { html, early } when S2C finishes; rejects on any S2C error, early close or timeout.
+ * early = true when we stopped waiting because S2C kept editing a page that was already complete.
  * onProgress({ status, chars }) is called as status messages and code chunks arrive.
  */
 export function generateHtml({
@@ -21,21 +22,25 @@ export function generateHtml({
   provider,
   stack = "html_tailwind",
   timeoutMs = 10 * 60_000,
+  graceMs = 60_000,
   onProgress = () => {},
 }) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     let html = null;
+    let completeHtml = null; // latest version that contains </html>; previews can be partial
     let chars = 0;
     let settled = false;
+    let graceTimer = null;
 
-    const finish = (err) => {
+    const finish = (err, result) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(graceTimer);
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
       if (err) reject(err);
-      else resolve({ html });
+      else resolve(result);
     };
 
     const timer = setTimeout(
@@ -80,9 +85,15 @@ export function generateHtml({
           html = msg.value;
           chars = html?.length ?? 0;
           onProgress({ status: "Writing the page...", chars });
+          if (html?.includes("</html>")) {
+            completeHtml = html;
+            // Local models sometimes keep "improving" a finished page for many minutes.
+            graceTimer ??= setTimeout(() => finish(null, { html: completeHtml, early: true }), graceMs);
+          }
           break;
         case "variantComplete":
-          finish(html ? null : new Error("Screenshot-to-Code finished without any code"));
+          if (html) finish(null, { html, early: false });
+          else finish(new Error("Screenshot-to-Code finished without any code"));
           break;
         case "variantError":
         case "error":

@@ -24,6 +24,7 @@ export function createJobQueue({ wsUrl, ollamaUrl, geminiApiKey }) {
       provider: null,
       contractHash,
       html: null,
+      finishedEarly: false,
       error: null,
       createdAt: Date.now(),
       startedAt: null,
@@ -50,7 +51,7 @@ export function createJobQueue({ wsUrl, ollamaUrl, geminiApiKey }) {
     for (const provider of providers) {
       job.provider = provider;
       try {
-        const { html } = await generateHtml({
+        const { html, early } = await generateHtml({
           wsUrl,
           imageDataUrl: job.input.image,
           instructions: job.input.instructions,
@@ -61,6 +62,7 @@ export function createJobQueue({ wsUrl, ollamaUrl, geminiApiKey }) {
           },
         });
         job.html = html;
+        job.finishedEarly = early;
         job.error = null;
         break;
       } catch (err) {
@@ -90,7 +92,7 @@ export function createJobQueue({ wsUrl, ollamaUrl, geminiApiKey }) {
       mode: job.mode,
       provider: job.provider,
       contractHash: job.contractHash,
-      ...(job.status === "done" && { html: job.html }),
+      ...(job.status === "done" && { finishedEarly: job.finishedEarly, html: job.html }),
       ...(job.status === "failed" && { error: job.error }),
     };
   }
