@@ -3,7 +3,7 @@
 > **Design:** see [ARCHITECTURE.md](ARCHITECTURE.md) (v2, approved). This file is our **step-by-step to-do list**.
 > **Rule:** do one step, report back, then move on. Tick the box when its "Done when" is true.
 
-**Current step:** ▶ **Step 6: Gateway on Laptop B**
+**Current step:** ▶ **Step 7: Tailscale + first call between the laptops**
 
 ---
 
@@ -29,7 +29,7 @@ Every step has four parts:
 ## Phase 2: Connect the two laptops
 
 - [x] **Step 5: Project repo skeleton.** ✅ 15 Oct: folders, root README, `.gitignore`, one `.env.example` per service. One Git repo for both laptops: folders for `gateway/`, `builder-api/`, `web/`, `templates/`, `spikes/`, `samples/`, plus `.gitignore` and `.env.example`.
-- [ ] **Step 6: Gateway on Laptop B.** Our first real service: `POST /v1/generations`, `GET /v1/generations/:id`, `GET /v1/health`, with an API key and a queue.
+- [x] **Step 6: Gateway on Laptop B.** ✅ 15 Oct: health, auth, queue, REST jobs; user's run 132 s local, 16 `data-field`. Our first real service: `POST /v1/generations`, `GET /v1/generations/:id`, `GET /v1/health`, with an API key and a queue.
 - [ ] **Step 7: Tailscale + first call between the laptops.** `curl` from Laptop A → Gateway on B → HTML comes back.
 
 ## Phase 3: Orchestrator on Laptop A
@@ -65,3 +65,8 @@ Every step has four parts:
 | 15 Oct 2026 | Contract Extractor: use **`qwen3-vl:8b-instruct`** (the thinking variant returns empty `content` with structured output). Test on Laptop B: 12 s, correct Contract. Enum options only list values visible in the screenshot, so the user should review them. |
 | 15 Oct 2026 | Contract Extractor on the Mac: 20.1 s, all checks passed. Still untested: other screenshots, Gemini `--cloud` path. |
 | 15 Oct 2026 | Repo: one `.env.example` per service (each runs on a different laptop). Gateway port 8787, Builder API port 4000. `1.html` moved to `samples/step3-cloud.html`. |
+| 15 Oct 2026 | Gateway piece 1 done (`/v1/health` + `X-API-Key`). Health showed `gpt-5.5` only **68% GPU** (8.1 GB at 16k context): the §5.2 Ollama settings were never set (flash attention off, KV cache fp16). Likely cause of the 3 min 38 s local time. Also: Ollama not on PATH; tray app's server failed to start once. |
+| 15 Oct 2026 | Applied §5.2 Ollama settings + Ollama on PATH. `gpt-5.5` still can't reach 100% GPU (Windows keeps ~1 GB VRAM): 16k ctx = 78% GPU, 29.6 tok/s; 12k = 84%, 34.7 tok/s; 8k = 89%, 39 tok/s. Kept 16k for now; decide after piece 2 measures real S2C prompt size. Cloud stays the demo path. |
+| 15 Oct 2026 | Gateway piece 2: first "local" run went to Gemini (429, free tier 5/min) because S2C's `.env` still had `GEMINI_API_KEY`; with Gemini + OpenAI-style keys S2C picks Gemini first. Moved the key to `gateway/.env`; S2C `.env` now has no keys (as §5.1 says). Agent mode streams code as repeated full-page `setCode` messages, not `chunk`. |
+| 15 Oct 2026 | Gateway piece 2 done: local run **111 s** (was 3 min 38 s), 6,175 chars, all 4 fields marked, `SAMPLE_EMPLOYEES` present, `data-action="create"` missing again (Add button is `type="submit"`). Largest S2C call used 9,098 tokens, so **keep 16k context** (12k would leave too little room for bigger pages). |
+| 15 Oct 2026 | Gateway piece 3 done: `POST`/`GET /v1/generations`, in-memory one-at-a-time queue, same request = same job, JSON errors. REST run: 132 s, local, 16 `data-field`, `create` missing. PowerShell 5.1: build JSON text with `[IO.File]::ReadAllText`, not `Get-Content -Raw` (adds hidden properties). |
