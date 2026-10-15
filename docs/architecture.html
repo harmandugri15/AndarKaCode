@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Frontend-to-Backend Builder Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout concept: an engineering schematic. Swimlanes = machines, cards = services, wires = data. */
+:root {
+  --bg: #f2f4f3;
+  --surface: #ffffff;
+  --ink: #14202b;
+  --muted: #586771;
+  --line: #d3dbda;
+  --edge: #8c9ca0;
+  --signal: #d6336c;
+  --lane-user: #eceff6;
+  --lane-a: #e5f0ed;
+  --lane-b: #f5eee2;
+  --lane-x: #efe9f4;
+  --c-user: #3b4a6b;
+  --c-a: #0f766e;
+  --c-b: #9a5b06;
+  --c-x: #7a46b0;
+  --wait: #c9d1d0;
+  --code-bg: #eef2f1;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 8px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1416; --surface: #152024; --ink: #e3ecea; --muted: #93a4a7; --line: #283739;
+    --edge: #6f8387; --signal: #ff6f9c;
+    --lane-user: #161c29; --lane-a: #112421; --lane-b: #241c11; --lane-x: #1d1727;
+    --c-user: #a3b3da; --c-a: #3fd0bd; --c-b: #f0b55c; --c-x: #c6a3f0;
+    --wait: #33403f; --code-bg: #10191b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1416; --surface: #152024; --ink: #e3ecea; --muted: #93a4a7; --line: #283739;
+  --edge: #6f8387; --signal: #ff6f9c;
+  --lane-user: #161c29; --lane-a: #112421; --lane-b: #241c11; --lane-x: #1d1727;
+  --c-user: #a3b3da; --c-a: #3fd0bd; --c-b: #f0b55c; --c-x: #c6a3f0;
+  --wait: #33403f; --code-bg: #10191b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.6 var(--font-body);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.wrap { max-width: 1440px; margin: 0 auto; padding-inline: 24px; padding-block: 32px 64px; }
+@media (max-width: 600px) { .wrap { padding-inline: 16px; } }
+
+h1, h2, h3, h4 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(30px, 4.2vw, 46px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
+h3 { font-size: 21px; font-weight: 600; }
+h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+p { margin: 0; }
+code, pre, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+a { color: var(--c-a); }
+
+.eyebrow { font: 500 12px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+
+/* Header */
+header.top { display: grid; gap: 14px; max-width: 900px; margin-bottom: 28px; }
+header.top .lede { font-size: 17px; color: var(--muted); max-width: 70ch; }
+header.top .lede strong { color: var(--ink); font-weight: 600; }
+.principle { font-family: var(--font-mono); font-size: 13px; border-left: 3px solid var(--signal); padding: 4px 0 4px 12px; color: var(--ink); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.ln { width: 26px; height: 0; border-top: 2px solid var(--edge); display: inline-block; }
+.ln.dash { border-top-style: dashed; }
+.ln.on { border-color: var(--signal); }
+
+/* Player */
+.player {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+  padding-block: 10px; margin-bottom: 14px;
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+}
+.player .ctrls { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn {
+  font: 500 13px/1 var(--font-body); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--edge); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.narration { flex: 1 1 320px; min-width: 0; font-size: 14px; }
+.narration b { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-right: 6px; }
+.stepcount { font: 500 12px var(--font-mono); color: var(--muted); }
+
+/* Main split */
+.main { display: grid; gap: 24px; align-items: start; }
+@media (min-width: 1280px) { .main { grid-template-columns: minmax(0, 1fr) 360px; } }
+
+/* Diagram */
+.diagram-scroll { min-width: 0; }
+.diagram {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr 1fr 0.9fr;
+  grid-auto-rows: auto;
+  column-gap: 34px; row-gap: 26px;
+  padding: 0 0 16px;
+}
+.lane { grid-row: 1 / span 12; border-radius: 10px; z-index: 0; margin: -6px -14px; }
+.lane.user { grid-column: 1; background: var(--lane-user); }
+.lane.a { grid-column: 2 / span 2; background: var(--lane-a); }
+.lane.b { grid-column: 4; background: var(--lane-b); }
+.lane.x { grid-column: 5; background: var(--lane-x); }
+.lane-h { grid-row: 1; z-index: 1; padding-top: 10px; font: 600 12px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+.lane-h small { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 12px; }
+.lane-h.user { grid-column: 1; color: var(--c-user); }
+.lane-h.a { grid-column: 2 / span 2; color: var(--c-a); }
+.lane-h.b { grid-column: 4; color: var(--c-b); }
+.lane-h.x { grid-column: 5; color: var(--c-x); }
+
+svg.wires { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: visible; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke 0.2s, opacity 0.2s; }
+.edge.dash { stroke-dasharray: 5 5; }
+.edge.on { stroke: var(--signal); stroke-width: 2.4; }
+@media (prefers-reduced-motion: no-preference) {
+  .edge.on { stroke-dasharray: 7 6; animation: flow 0.9s linear infinite; }
+}
+@keyframes flow { to { stroke-dashoffset: -13; } }
+.edge.dim, .elabel.dim { opacity: 0.22; }
+.elabel { font: 500 11px var(--font-mono); fill: var(--muted); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; transition: opacity 0.2s; }
+.elabel.on { fill: var(--signal); }
+.arrow path { fill: var(--edge); }
+.arrow-on path { fill: var(--signal); }
+
+.node {
+  position: relative; z-index: 2;
+  display: grid; gap: 3px; text-align: left;
+  font: inherit; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 12px 11px; cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
+  min-width: 0;
+}
+.node:hover { border-color: var(--edge); }
+.node .n-top { display: flex; align-items: center; gap: 8px; }
+.node .n-step { font: 600 11px/1 var(--font-mono); min-width: 22px; height: 20px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 10px; color: var(--surface); }
+.node .n-title { font: 600 15px/1.2 var(--font-display); }
+.node .n-tool { font: 400 11.5px/1.35 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.node .n-lane { display: none; font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+.node[data-lane="user"] .n-step { background: var(--c-user); }
+.node[data-lane="a"] .n-step { background: var(--c-a); }
+.node[data-lane="b"] .n-step { background: var(--c-b); }
+.node[data-lane="x"] .n-step { background: var(--c-x); }
+.node[data-kind="ai"]::after {
+  content: "AI"; position: absolute; top: 8px; right: 9px;
+  font: 600 10px/1 var(--font-mono); letter-spacing: 0.06em; color: var(--signal);
+  border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px;
+}
+.node[data-kind="store"] { border-style: dashed; }
+.node.on { border-color: var(--signal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 22%, transparent); }
+.node.sel { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink); }
+.node.dim { opacity: 0.38; }
+
+/* List mode on narrow screens */
+@media (max-width: 899px) {
+  .diagram { grid-template-columns: minmax(0, 1fr); row-gap: 10px; }
+  .lane, .lane-h, svg.wires { display: none; }
+  .node { grid-column: 1 !important; grid-row: auto !important; }
+  .node .n-lane { display: block; }
+  .node[data-lane="user"] .n-lane { color: var(--c-user); }
+  .node[data-lane="a"] .n-lane { color: var(--c-a); }
+  .node[data-lane="b"] .n-lane { color: var(--c-b); }
+  .node[data-lane="x"] .n-lane { color: var(--c-x); }
+}
+
+/* Detail panel */
+.panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 20px 20px 22px; display: grid; gap: 14px; min-width: 0;
+}
+@media (min-width: 1280px) {
+  .panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 76px); max-height: calc(100vh - 96px); overflow: auto; }
+  .panel .close { display: none; }
+}
+@media (max-width: 1279px) {
+  .panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    max-height: 62vh; overflow: auto; border-radius: 14px 14px 0 0;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.18);
+    transform: translateY(105%); transition: transform 0.25s ease;
+  }
+  .panel.open { transform: none; }
+  .panel-inner { max-width: 760px; margin: 0 auto; width: 100%; display: grid; gap: 14px; }
+}
+@media (min-width: 1280px) { .panel-inner { display: grid; gap: 14px; } }
+@media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+.panel .close { justify-self: end; }
+.panel .hint { color: var(--muted); font-size: 14px; }
+.panel dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.panel dt { font: 500 12px/1.6 var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.panel dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.panel ol { margin: 0; padding-left: 20px; display: grid; gap: 5px; font-size: 14px; }
+.panel .why { font-size: 14px; }
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chips li { font: 400 12px/1.3 var(--font-mono); background: var(--code-bg); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; }
+.chips li em { font-style: normal; color: var(--muted); }
+.mobile-hint { display: none; font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+@media (max-width: 1279px) { .mobile-hint { display: block; } }
+
+/* Sections */
+section.block { margin-top: 64px; display: grid; gap: 18px; }
+section.block > header { display: grid; gap: 6px; max-width: 760px; }
+section.block > header p { color: var(--muted); }
+
+.grid-cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card h3 { font-size: 17px; }
+.card p { font-size: 14px; color: var(--muted); }
+.card .k { font: 600 12px var(--font-mono); color: var(--signal); }
+
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 12px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--code-bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.lic { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.tag { font: 500 11px var(--font-mono); border-radius: 4px; padding: 1px 6px; border: 1px solid var(--line); white-space: nowrap; }
+.tag.oss { color: var(--c-a); border-color: color-mix(in srgb, var(--c-a) 40%, transparent); }
+.tag.free { color: var(--c-b); border-color: color-mix(in srgb, var(--c-b) 40%, transparent); }
+
+pre.code { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre.code .c { color: var(--muted); }
+pre.code .s { color: var(--c-a); }
+pre.code .k { color: var(--c-b); }
+
+.two { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+.two > * { min-width: 0; }
+
+/* Timeline */
+.timeline { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 16px; overflow-x: auto; }
+.tl-inner { min-width: 620px; display: grid; gap: 16px; }
+.tl-row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; }
+.tl-name { font: 600 12px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; padding-top: 3px; }
+.tl-track { position: relative; height: 22px; background: color-mix(in srgb, var(--wait) 35%, transparent); border-radius: 4px; }
+.tl-bar { position: absolute; top: 0; bottom: 0; border-radius: 4px; min-width: 4px; }
+.tl-bar.ai { background: var(--signal); }
+.tl-bar.det { background: var(--c-a); }
+.tl-bar.gpu { background: var(--c-b); }
+.tl-bar.human { background: var(--c-user); }
+.tl-bar.wait { background: repeating-linear-gradient(135deg, var(--wait) 0 5px, transparent 5px 10px); }
+.tl-notes { grid-column: 2; font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 14px; font-variant-numeric: tabular-nums; }
+.tl-axis { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
+.tl-ticks { position: relative; height: 18px; font: 400 11px var(--font-mono); color: var(--muted); }
+.tl-ticks span { position: absolute; transform: translateX(-50%); }
+.tl-ticks span:first-child { transform: none; }
+.tl-foot { font-size: 13.5px; }
+
+/* Progress */
+.progress { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); padding: 0; margin: 0; }
+.progress li { list-style: none; display: flex; gap: 10px; align-items: baseline; font-size: 14px; padding: 8px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); }
+.progress .st { font: 600 11px var(--font-mono); min-width: 52px; }
+.progress .done .st { color: var(--c-a); }
+.progress .now { border-color: var(--signal); }
+.progress .now .st { color: var(--signal); }
+.progress .todo .st { color: var(--muted); }
+
+details { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; }
+details + details { margin-top: 8px; }
+summary { cursor: pointer; font-weight: 600; }
+details p { margin-top: 8px; color: var(--muted); font-size: 14px; max-width: 75ch; }
+
+footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">AndarKaCode · architecture v2 · 15 Oct 2026</p>
+  <h1>Frontend-to-Backend Builder</h1>
+  <p class="lede">One screenshot goes in. <strong>Laptop B</strong> builds the frontend with Screenshot-to-Code on its GPU, and <strong>Laptop A</strong> builds the backend from our own templates, at the same time. Both follow one shared <strong>Contract</strong>, so they fit together. The result is checked, previewed and pushed to the user's GitHub.</p>
+  <p class="principle">Screenshot-to-Code generates the frontend. Our product turns it into a real, working application.</p>
+  <div class="legend" aria-label="Legend">
+    <span><i class="sw" style="background:var(--c-user)"></i>User</span>
+    <span><i class="sw" style="background:var(--c-a)"></i>Laptop A (orchestrator)</span>
+    <span><i class="sw" style="background:var(--c-b)"></i>Laptop B (GPU worker)</span>
+    <span><i class="sw" style="background:var(--c-x)"></i>External service</span>
+    <span><i class="ln"></i>data flow</span>
+    <span><i class="ln dash"></i>backup / repair path</span>
+    <span><i class="ln on"></i>active in this step</span>
+  </div>
+</header>
+
+<div class="player" role="region" aria-label="Flow player">
+  <div class="ctrls">
+    <button class="btn" id="prev" type="button" aria-label="Previous step">◀ Prev</button>
+    <button class="btn primary" id="play" type="button">▶ Play the flow</button>
+    <button class="btn" id="next" type="button" aria-label="Next step">Next ▶</button>
+    <button class="btn" id="reset" type="button">Show all</button>
+  </div>
+  <p class="narration" id="narration" aria-live="polite"><b>13 steps.</b> Press Play to watch one screenshot travel through the system, or click any box to see how it works.</p>
+  <span class="stepcount" id="stepcount"></span>
+</div>
+
+<p class="mobile-hint">Tap any box to open its details.</p>
+
+<div class="main">
+  <div class="diagram-scroll">
+    <div class="diagram" id="diagram">
+      <div class="lane user" aria-hidden="true"></div>
+      <div class="lane a" aria-hidden="true"></div>
+      <div class="lane b" aria-hidden="true"></div>
+      <div class="lane x" aria-hidden="true"></div>
+      <div class="lane-h user">User<small>Browser</small></div>
+      <div class="lane-h a">Laptop A · Orchestrator<small>Apple M5, 16 GB · owns all state</small></div>
+      <div class="lane-h b">Laptop B · UI worker<small>RTX 4060 8 GB VRAM · 16 GB RAM</small></div>
+      <div class="lane-h x">External<small>Cloud and GitHub</small></div>
+      <svg class="wires" id="wires" aria-hidden="true"></svg>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel" aria-live="polite" aria-label="Component details">
+    <div class="panel-inner" id="panel-inner"></div>
+  </aside>
+</div>
+
+<!-- Alignment -->
+<section class="block" id="alignment">
+  <header>
+    <p class="eyebrow">The core question</p>
+    <h2>How the frontend and backend stay aligned</h2>
+    <p>Six mechanisms stack on top of each other. Each one catches what the one before it might miss.</p>
+  </header>
+  <div class="grid-cards">
+    <div class="card"><span class="k">1 · One source of truth</span><h3>A versioned Contract</h3><p>A small JSON document lists the resource, fields, actions and rules. A Zod schema checks it. Every edit creates a new version with a SHA-256 hash.</p></div>
+    <div class="card"><span class="k">2 · Told, not guessed</span><h3>Instructions sent to Screenshot-to-Code</h3><p>The Contract becomes text sent along with the screenshot: exact field names, <code>data-field</code> and <code>data-action</code> markers, and a <code>SAMPLE_*</code> constant.</p></div>
+    <div class="card"><span class="k">3 · Both sides generated</span><h3>Server and client from one Contract</h3><p>The Express routes and the frontend's <code>api.js</code> client come from the same templates and the same Contract. The AI never writes the API calls.</p></div>
+    <div class="card"><span class="k">4 · Checked by code</span><h3>Conformance check + repair</h3><p>We parse the generated JSX and confirm every marker exists. If any are missing, a narrow "update" job asks Screenshot-to-Code to add exactly those.</p></div>
+    <div class="card"><span class="k">5 · Same version or stop</span><h3>Sync Barrier</h3><p>Integration starts only when the frontend hash, the backend hash and the current Contract hash are all equal. An out-of-date build is rejected and rebuilt.</p></div>
+    <div class="card"><span class="k">6 · No URL mismatch</span><h3>Same-origin app</h3><p>The generated Express server also serves <code>frontend/</code>. The page calls <code>/api/employees</code> on the same origin, so there are no CORS or base-URL bugs.</p></div>
+  </div>
+</section>
+
+<!-- Contract -->
+<section class="block" id="contract">
+  <header>
+    <p class="eyebrow">The sync language</p>
+    <h2>One Contract, five outputs</h2>
+    <p>Read each row left to right: one line of the Contract becomes matching code in every part of the generated app.</p>
+  </header>
+  <div class="two">
+    <pre class="code" aria-label="Example Contract"><span class="c">// contract.json · version 2 · sha256 9f3c…a1</span>
+{
+  <span class="k">"resource"</span>: { <span class="k">"name"</span>: <span class="s">"employee"</span>, <span class="k">"plural"</span>: <span class="s">"employees"</span> },
+  <span class="k">"fields"</span>: [
+    { <span class="k">"name"</span>: <span class="s">"fullName"</span>, <span class="k">"label"</span>: <span class="s">"Full Name"</span>, <span class="k">"type"</span>: <span class="s">"string"</span>, <span class="k">"required"</span>: true },
+    { <span class="k">"name"</span>: <span class="s">"email"</span>, <span class="k">"label"</span>: <span class="s">"Email"</span>, <span class="k">"type"</span>: <span class="s">"email"</span>, <span class="k">"unique"</span>: true },
+    { <span class="k">"name"</span>: <span class="s">"department"</span>, <span class="k">"type"</span>: <span class="s">"enum"</span>, <span class="k">"options"</span>: [<span class="s">"HR"</span>, <span class="s">"Engineering"</span>] },
+    { <span class="k">"name"</span>: <span class="s">"salary"</span>, <span class="k">"type"</span>: <span class="s">"number"</span>, <span class="k">"min"</span>: 0 }
+  ],
+  <span class="k">"actions"</span>: [<span class="s">"list"</span>, <span class="s">"create"</span>, <span class="s">"update"</span>, <span class="s">"delete"</span>, <span class="s">"search"</span>],
+  <span class="k">"rules"</span>: { <span class="k">"delete"</span>: <span class="s">"soft"</span>, <span class="k">"auth"</span>: <span class="s">"none"</span> },
+  <span class="k">"ui"</span>: { <span class="k">"sampleConst"</span>: <span class="s">"SAMPLE_EMPLOYEES"</span> },
+  <span class="k">"openQuestions"</span>: [<span class="s">"Who may delete employees?"</span>]
+}</pre>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Contract</th><th>Frontend (Laptop B)</th><th>API client (generated)</th><th>Backend (generated)</th><th>Test (generated)</th></tr></thead>
+        <tbody>
+          <tr><td><code>fullName</code>, required</td><td><code>&lt;th data-field="fullName"&gt;</code>, <code>&lt;input name="fullName"&gt;</code></td><td><code>api.employees.create({ fullName })</code></td><td>Mongoose <code>required: true</code> + Zod rule</td><td>rejects a missing fullName with 400</td></tr>
+          <tr><td>action <code>create</code></td><td><code>data-action="create"</code> button</td><td><code>api.employees.create()</code></td><td><code>POST /api/employees</code></td><td>returns 201 and saves</td></tr>
+          <tr><td>action <code>delete</code> + soft rule</td><td><code>data-action="delete"</code> per row</td><td><code>api.employees.remove(id)</code></td><td><code>DELETE /api/employees/:id</code> sets <code>deletedAt</code></td><td>deleted rows aren't listed</td></tr>
+          <tr><td>action <code>search</code></td><td><code>data-action="search"</code> input</td><td><code>api.employees.list({ q })</code></td><td><code>GET /api/employees?q=</code></td><td>search filters results</td></tr>
+          <tr><td><code>ui.sampleConst</code></td><td><code>const SAMPLE_EMPLOYEES = […]</code></td><td>replaced by <code>api.employees.list()</code></td><td>Mongo collection <code>employees</code></td><td>browser test: table shows DB rows</td></tr>
+          <tr><td>(shared rules)</td><td>shows <code>error.fields</code> under inputs</td><td>throws <code>{ code, message, fields }</code></td><td>list: <code>{ data, meta }</code> · error: <code>{ error: { code, message, fields } }</code></td><td>response shape checks</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Timeline -->
+<section class="block" id="timeline">
+  <header>
+    <p class="eyebrow">Why parallel matters</p>
+    <h2>Where the time goes</h2>
+    <p>The total is about the slowest branch (the frontend on the GPU), not the sum of every step. The user's review happens during the wait, so that time isn't lost.</p>
+  </header>
+  <div class="timeline">
+    <div class="tl-inner" id="tl"></div>
+    <p class="tl-foot"><b>Measured:</b> frontend about 5 min on the RTX 4060 (Step 2). <b>Estimates</b> until we measure them in Steps 4 and 12: Contract about 20–40 s, verification under 1 min. Backend generation is template-based, so it takes about a second.</p>
+  </div>
+</section>
+
+<!-- Efficiency -->
+<section class="block" id="efficiency">
+  <header>
+    <p class="eyebrow">Getting the most from free hardware</p>
+    <h2>Seven efficiency rules this design follows</h2>
+  </header>
+  <div class="grid-cards">
+    <div class="card"><h3>Keep AI output small</h3><p>Generation time grows with output length. The Contract is about 300 tokens. Long code (the backend) comes from templates in about a second.</p></div>
+    <div class="card"><h3>Use each machine for one job</h3><p>The GPU laptop does the heaviest AI job (the HTML). The Mac does the short AI job and everything deterministic. No two models compete for one machine's memory.</p></div>
+    <div class="card"><h3>Overlap human time with machine time</h3><p>The user reviews the Contract while the GPU builds the page, so the wait does double duty.</p></div>
+    <div class="card"><h3>Never compute the same thing twice</h3><p>Screenshots, Contracts and jobs are keyed by hash (content-addressed). A repeat request returns instantly, which also makes retries safe (idempotent).</p></div>
+    <div class="card"><h3>Use code where you can</h3><p>Validation, routing, wiring and tests are all deterministic code. AI is used only where a picture has to be understood.</p></div>
+    <div class="card"><h3>Constrain the model's output</h3><p>Ollama's structured output takes the Contract's JSON Schema, so the model can only produce valid JSON. That means no parse errors and no retries.</p></div>
+    <div class="card"><h3>Fail over, not fail</h3><p>Local first; on error, timeout or invalid output, the same request goes to the backup key. Each result records which provider made it.</p></div>
+  </div>
+</section>
+
+<!-- Tool stack -->
+<section class="block" id="tools">
+  <header>
+    <p class="eyebrow">Every tool, every step</p>
+    <h2>The tool stack</h2>
+    <p>Everything is free. Everything is open source except two marked services: the backup AI key (only used when local fails) and GitHub itself.</p>
+  </header>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Where</th><th>Tool</th><th>What it does here</th><th>License</th></tr></thead>
+      <tbody>
+        <tr><td>Our UI</td><td>React + Vite + Tailwind CSS</td><td>Upload, live status, Contract editor, preview and publish buttons</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Live status</td><td>Server-Sent Events (web standard)</td><td>Push progress from the server to the browser with no polling</td><td class="lic"><span class="tag oss">standard</span></td></tr>
+        <tr><td>Builder API</td><td>Node.js 24 LTS + Express 5</td><td>REST API and orchestration on Laptop A</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Upload</td><td>multer + sharp + node:crypto</td><td>Receive the file, shrink it to at most 1280 px, SHA-256 hash</td><td class="lic"><span class="tag oss">MIT · Apache-2.0</span></td></tr>
+        <tr><td>Our database</td><td>MongoDB Community + Mongoose</td><td>Projects, Contracts, jobs, artifacts, users</td><td class="lic"><span class="tag free">SSPL (free)</span> <span class="tag oss">MIT</span></td></tr>
+        <tr><td>Workflow</td><td>XState v5</td><td>The state machine: parallel FE/BE branches and the Barrier join</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Schemas</td><td>Zod 4</td><td>Contract schema, converted to JSON Schema for the model, and request validation</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Local AI runtime</td><td>Ollama (Metal on A, CUDA on B)</td><td>Runs the model; structured outputs; OpenAI-compatible API</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Vision model</td><td>Qwen3-VL 8B (4-bit)</td><td>Reads screenshots: Contract on A, HTML on B</td><td class="lic"><span class="tag oss">Apache-2.0</span></td></tr>
+        <tr><td>UI generation</td><td>Screenshot-to-Code (FastAPI), pinned <code>a813977</code></td><td>Screenshot + instructions → <code>index.html</code></td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Gateway</td><td>Express + ws + p-queue</td><td>REST wrapper around Screenshot-to-Code's WebSocket; one job at a time</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Link between laptops</td><td>Tailscale (or Headscale)</td><td>Private network that works across any Wi-Fi</td><td class="lic"><span class="tag free">free plan</span> <span class="tag oss">BSD-3</span></td></tr>
+        <tr><td>Backend generator</td><td>Handlebars + Prettier</td><td>Contract → model, routes, controller, validation, api.js, tests</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Wirer</td><td>cheerio + @babel/parser + @babel/traverse + recast</td><td>Find the JSX, change it safely, print it with formatting preserved</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Verifier</td><td>Vitest + Supertest + mongodb-memory-server</td><td>Generated API tests against a throwaway database</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Browser test</td><td>Playwright</td><td>Headless smoke test: add, edit and delete in the real page</td><td class="lic"><span class="tag oss">Apache-2.0</span></td></tr>
+        <tr><td>Sandbox</td><td>Colima + Docker Engine + Compose</td><td>Throwaway app + Mongo containers with memory limits and no secrets</td><td class="lic"><span class="tag oss">MIT · Apache-2.0</span></td></tr>
+        <tr><td>Publish</td><td>GitHub OAuth App + Octokit</td><td>Sign in with GitHub; create a repo; push one commit through the Git Data API</td><td class="lic"><span class="tag oss">MIT</span> <span class="tag free">GitHub</span></td></tr>
+        <tr><td>CI for the user</td><td>GitHub Actions</td><td>Re-runs the generated tests in the user's repo (green check)</td><td class="lic"><span class="tag free">free for public repos</span></td></tr>
+        <tr><td>Logs</td><td>pino</td><td>Structured logs with project and job ids on both laptops</td><td class="lic"><span class="tag oss">MIT</span></td></tr>
+        <tr><td>Backup AI</td><td>Gemini API (free tier key)</td><td>Used only when the local model fails, or in Demo mode</td><td class="lic"><span class="tag free">proprietary, free tier</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Output repo -->
+<section class="block" id="output">
+  <header>
+    <p class="eyebrow">What the user receives</p>
+    <h2>The generated repository</h2>
+    <p>This is pushed as one commit to a new repo in the user's GitHub account. Every file except <code>index.html</code> comes from our templates.</p>
+  </header>
+  <div class="two">
+<pre class="code">employee-app/
+├── README.md            <span class="c">how to run · the Contract · credits</span>
+├── contract.json        <span class="c">the agreed Contract (version + hash)</span>
+├── docker-compose.yml   <span class="c">app + mongo, one command</span>
+├── .env.example
+├── frontend/
+│   ├── index.html       <span class="c">Screenshot-to-Code, wired by us</span>
+│   └── api.js           <span class="c">generated client, from the Contract</span>
+├── backend/
+│   ├── server.js        <span class="c">also serves frontend/ (same origin)</span>
+│   ├── models/employee.model.js
+│   ├── routes/employee.routes.js
+│   ├── controllers/employee.controller.js
+│   └── validation/employee.schema.js
+├── tests/
+│   ├── api.test.js      <span class="c">Vitest + Supertest</span>
+│   └── smoke.spec.js    <span class="c">Playwright</span>
+└── .github/workflows/ci.yml</pre>
+    <div class="grid-cards" style="grid-template-columns: 1fr;">
+      <div class="card"><h3>Two separate databases</h3><p><code>builder_db</code> on Laptop A stores <em>our</em> users, projects and jobs. The generated app gets its own <code>employee_app</code> database, set in its own <code>.env</code>.</p></div>
+      <div class="card"><h3>GitHub permissions, asked only when needed</h3><p>Login asks for <code>read:user</code>. The first Publish asks for <code>public_repo</code> + <code>workflow</code> (the second is needed to push the CI file). The token is encrypted with AES-256-GCM and never leaves Laptop A.</p></div>
+      <div class="card"><h3>Safety</h3><p>Only the Gateway is reachable on Laptop B, and it needs an API key. Previews run in containers with no secrets, on a different origin from our UI.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Progress -->
+<section class="block" id="progress">
+  <header>
+    <p class="eyebrow">Where we are</p>
+    <h2>Build order</h2>
+    <p>One step at a time. The full checklist lives in <code>plan.md</code>.</p>
+  </header>
+  <ol class="progress">
+    <li class="done"><span class="st">DONE</span>1 · Ollama on Laptop B's GPU</li>
+    <li class="done"><span class="st">DONE</span>2 · Screenshot-to-Code with a local model</li>
+    <li class="now"><span class="st">NEXT</span>3 · Contract instructions + backup key</li>
+    <li class="todo"><span class="st">TODO</span>4 · Contract Extractor (Laptop A)</li>
+    <li class="todo"><span class="st">TODO</span>5 · Repo skeleton</li>
+    <li class="todo"><span class="st">TODO</span>6 · Gateway on Laptop B</li>
+    <li class="todo"><span class="st">TODO</span>7 · Tailscale + first cross-laptop call</li>
+    <li class="todo"><span class="st">TODO</span>8 · Builder API + MongoDB</li>
+    <li class="todo"><span class="st">TODO</span>9 · State machine + Sync Barrier</li>
+    <li class="todo"><span class="st">TODO</span>10 · Backend + client + test generator</li>
+    <li class="todo"><span class="st">TODO</span>11 · Wirer</li>
+    <li class="todo"><span class="st">TODO</span>12 · Verifier + repair loop</li>
+    <li class="todo"><span class="st">TODO</span>13 · Our React UI</li>
+    <li class="todo"><span class="st">TODO</span>14 · Sandbox preview</li>
+    <li class="todo"><span class="st">TODO</span>15 · GitHub login + publish</li>
+    <li class="todo"><span class="st">TODO</span>16 · Demo rehearsal</li>
+  </ol>
+</section>
+
+<!-- Viva -->
+<section class="block" id="viva">
+  <header>
+    <p class="eyebrow">Practice</p>
+    <h2>Viva questions</h2>
+  </header>
+  <div>
+    <details><summary>How do the two laptops stay in sync?</summary><p>Laptop A owns all state and always starts the calls. Both sides build from one versioned Contract, every result is stamped with that Contract's hash, and the Sync Barrier only continues when the hashes match.</p></details>
+    <details><summary>How do you know the frontend matches the backend?</summary><p>The frontend is told the exact field names and markers. The API client and server are generated from the same Contract. Then we parse the JSX to confirm the markers exist, and run tests and a browser smoke test.</p></details>
+    <details><summary>Where exactly is the AI, and why only there?</summary><p>In two places: reading the screenshot into a Contract (our code) and generating the HTML (Screenshot-to-Code). Everything that must be exact, such as routes, validation, wiring and tests, is deterministic code, so it's reliable and explainable.</p></details>
+    <details><summary>Why is a 5-minute generation acceptable?</summary><p>It runs on a free local GPU, the user reviews the Contract during that time, repeated screenshots are cached, and the backup key can take over for the demo.</p></details>
+    <details><summary>Why a Gateway instead of calling Screenshot-to-Code directly?</summary><p>Screenshot-to-Code only has an internal WebSocket that may change. The Gateway gives a stable REST contract with an API key, a queue and a cache: the Adapter pattern.</p></details>
+    <details><summary>How is the user's GitHub account kept safe?</summary><p>We request minimal OAuth scopes only when needed, store the token encrypted, never send it to Laptop B or a container, and only create new repos, never overwriting existing ones.</p></details>
+  </div>
+</section>
+
+<footer>
+  Screenshot-to-Code © its authors, MIT license, used as a separate service. Facts about its interface were checked at commit <code>a813977</code>. Timings marked "estimate" are to be measured.
+</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var NODES = [
+    { id: "upload", lane: "user", col: 1, row: 2, step: 1, kind: "human",
+      title: "Upload screenshot", tool: "Our React UI",
+      what: "The user drops one screenshot of the screen they want, such as an employee dashboard.",
+      input: "PNG or JPG", output: "multipart POST /api/projects", runs: "User's browser", time: "instant",
+      how: ["The UI sends the file to Laptop A with multipart/form-data.", "It immediately opens a live status stream (SSE) for this project."],
+      why: "One input for the whole system. Everything after this is automatic until the user reviews the Contract.",
+      tools: [["React + Vite", "MIT"], ["Tailwind CSS", "MIT"]] },
+
+    { id: "intake", lane: "a", col: 2, row: 2, step: 1, kind: "det",
+      title: "Intake API", tool: "Express · multer · sharp",
+      what: "Receives the image, normalises it and gives it an identity.",
+      input: "Screenshot file", output: "projectId + imageHash", runs: "Laptop A", time: "under 1 s",
+      how: ["multer reads the upload; sharp shrinks it to at most 1280 px wide (fewer image tokens, faster AI).", "SHA-256 of the pixels becomes imageHash.", "If this hash was seen before, cached results are reused."],
+      why: "Hashing makes the system content-addressed: the same screenshot never costs AI time twice, and retries are safe.",
+      tools: [["Node.js 24 LTS", "MIT"], ["Express 5", "MIT"], ["multer", "MIT"], ["sharp", "Apache-2.0"], ["node:crypto", "built-in"]] },
+
+    { id: "mongo", lane: "a", col: 3, row: 2, step: 1, kind: "store",
+      title: "MongoDB · builder_db", tool: "Mongoose models",
+      what: "Our product's own memory: users, projects, Contracts, jobs, artifacts, publishes.",
+      input: "Every state change", output: "The single source of truth for status", runs: "Laptop A", time: "ms",
+      how: ["projects: state + current Contract version.", "contracts: every version with its hash.", "jobs: kind, status, provider (local/cloud), contractHash.", "artifacts: html / backend / zip, each with contractHash."],
+      why: "Because only Laptop A stores state, there's never a question of which laptop is right.",
+      tools: [["MongoDB Community", "SSPL, free"], ["Mongoose", "MIT"]] },
+
+    { id: "extract", lane: "a", col: 2, row: 3, step: 2, kind: "ai",
+      title: "Contract Extractor", tool: "Ollama structured output · Zod",
+      what: "Looks at the screenshot and writes the Contract: resource, fields, types, actions and open questions.",
+      input: "Resized screenshot", output: "Contract JSON (about 300 tokens)", runs: "Laptop A (Apple M5, Metal)", time: "estimate 20–40 s",
+      how: ["The Zod schema is converted to JSON Schema and passed as Ollama's format parameter, so the model can only produce valid JSON.", "think: false, because extraction doesn't need hidden reasoning tokens.", "The result is validated again with Zod.", "If local fails or times out, the same request goes to the backup key."],
+      why: "This is the AI doing what only AI can do: understanding a picture. Its output is small and checkable, so it's fast and safe.",
+      tools: [["Ollama", "MIT"], ["Qwen3-VL 8B", "Apache-2.0"], ["Zod 4", "MIT"]] },
+
+    { id: "ollamaA", lane: "a", col: 3, row: 3, step: 2, kind: "det",
+      title: "Ollama on the Mac", tool: "qwen3-vl:8b · Metal",
+      what: "The local model server on Laptop A, used only for short, structured jobs.",
+      input: "Image + JSON Schema", output: "Constrained JSON", runs: "Laptop A", time: "model stays loaded",
+      how: ["OLLAMA_KEEP_ALIVE=-1 keeps the model in memory, so there's no cold start.", "One model loaded at a time (16 GB is shared with MongoDB and Docker)."],
+      why: "Free, private, and the Mac is otherwise idle while the GPU laptop builds the page.",
+      tools: [["Ollama", "MIT"], ["Qwen3-VL 8B", "Apache-2.0"]] },
+
+    { id: "contract", lane: "a", col: 2, row: 4, step: 3, kind: "det",
+      title: "Contract vN + hash", tool: "Zod · SHA-256",
+      what: "The agreed description of the app. Both laptops build from it.",
+      input: "Extractor output or user edits", output: "contract.json with version and hash", runs: "Laptop A", time: "instant",
+      how: ["Validated with the Zod schema.", "Hashed with SHA-256, so the same content gives the same hash.", "Every user edit creates version N+1 and a new hash.", "The hash is attached to every job and artifact built from it."],
+      why: "This is the heart of the sync design. If both sides carry the same hash, they were built from the same plan.",
+      tools: [["Zod 4", "MIT"], ["node:crypto", "built-in"]] },
+
+    { id: "review", lane: "user", col: 1, row: 4, step: 7, kind: "human",
+      title: "Review & edit Contract", tool: "Contract editor in our UI",
+      what: "The user checks fields and answers open questions such as soft vs hard delete.",
+      input: "Draft Contract", output: "Approved Contract (maybe vN+1)", runs: "User's browser", time: "runs during the frontend build",
+      how: ["Shows fields, types and actions in a form.", "Open questions must be answered before Publish.", "Renaming a label is a cheap patch; adding or removing a field triggers an update job."],
+      why: "A screenshot can't show business rules. The human decides them, and does it while the GPU is busy.",
+      tools: [["React", "MIT"]] },
+
+    { id: "orch", lane: "a", col: 2, row: 5, step: 4, kind: "det",
+      title: "Orchestrator", tool: "XState v5 state machine",
+      what: "Decides what happens next. Starts the frontend and backend branches at the same time.",
+      input: "Contract vN", output: "Two jobs stamped with the Contract hash", runs: "Laptop A", time: "instant",
+      how: ["States: UPLOADED → CONTRACT_DRAFT → BUILDING (parallel: FE and BE) → SYNCED → INTEGRATING → VERIFYING → READY → SHIPPED.", "Persists every transition to MongoDB.", "Pushes each change to the browser with Server-Sent Events.", "Calls Laptop B; Laptop B never calls Laptop A."],
+      why: "An explicit state machine makes the parallel build and the join easy to reason about and to explain.",
+      tools: [["XState v5", "MIT"], ["Express 5", "MIT"], ["pino", "MIT"]] },
+
+    { id: "gateway", lane: "b", col: 4, row: 5, step: 4, kind: "det",
+      title: "S2C Gateway", tool: "Express · ws · p-queue",
+      what: "Our small REST service on Laptop B. It's the only thing reachable from outside.",
+      input: "POST /v1/generations {image, instructions, contractHash, type, mode}", output: "GET /v1/generations/:id → {status, html, provider}", runs: "Laptop B", time: "queue + generation",
+      how: ["Checks the X-API-Key header.", "p-queue runs one job at a time (one GPU).", "Opens a WebSocket to Screenshot-to-Code on localhost and collects status, chunk and setCode messages.", "Local mode sends openAiBaseURL = Ollama; cloud mode sends only the backup key. No restart needed.", "Caches by (imageHash, contractHash, type)."],
+      why: "Screenshot-to-Code has only an internal WebSocket. The Gateway turns it into a stable API (Adapter pattern), so upgrades only touch this file.",
+      tools: [["Express 5", "MIT"], ["ws", "MIT"], ["p-queue", "MIT"], ["Tailscale", "free plan"]] },
+
+    { id: "status", lane: "user", col: 1, row: 6, step: 4, kind: "human",
+      title: "Live progress", tool: "Server-Sent Events",
+      what: "The user watches every stage change live: Contract ready, frontend 40%, verifying, and so on.",
+      input: "SSE stream from Laptop A", output: "Progress UI", runs: "User's browser", time: "real time",
+      how: ["EventSource on /api/projects/:id/events.", "Falls back to polling GET /api/projects/:id if the stream drops."],
+      why: "A 5-minute wait feels much shorter when you can see it moving.",
+      tools: [["EventSource (web standard)", "standard"]] },
+
+    { id: "codegen", lane: "a", col: 3, row: 6, step: 6, kind: "det",
+      title: "Backend + client + test generator", tool: "Handlebars · Prettier",
+      what: "Turns the Contract into the server, the frontend's api.js client and the tests.",
+      input: "Contract vN", output: "backend/, frontend/api.js, tests/ (stamped with the hash)", runs: "Laptop A", time: "about 1 s",
+      how: ["Fills templates we wrote: model, routes, controller, Zod validation, server.js.", "Generates api.js with one function per action, so frontend calls are never guessed.", "Generates API tests and a Playwright smoke test from the same Contract.", "Prettier formats everything consistently."],
+      why: "Code that must be exact comes from templates: same input, same output, every time, and we can explain every line.",
+      tools: [["Handlebars", "MIT"], ["Prettier", "MIT"], ["Zod 4", "MIT"]] },
+
+    { id: "s2c", lane: "b", col: 4, row: 6, step: 5, kind: "ai",
+      title: "Screenshot-to-Code", tool: "FastAPI · pinned a813977",
+      what: "Builds the React + Tailwind page from the screenshot and our Contract instructions.",
+      input: "Image + instruction text (field names, markers, SAMPLE const)", output: "index.html", runs: "Laptop B", time: "measured about 5 min",
+      how: ["The 2-line patch sets 1 variant instead of 4 (and 1 for updates).", "Image mode sends our text instructions to the model with the picture.", "The agent writes the file using its create_file and edit_file tools."],
+      why: "We reuse a strong open-source tool for the UI instead of rebuilding it, and keep it separate behind the Gateway.",
+      tools: [["screenshot-to-code", "MIT"], ["FastAPI", "MIT"]] },
+
+    { id: "cloud", lane: "x", col: 5, row: 6, step: 8, kind: "ai",
+      title: "Backup AI key", tool: "Gemini API free tier",
+      what: "Takes over when the local model fails, times out or gives invalid output, or always in Demo mode.",
+      input: "Same request as local", output: "Same output format", runs: "Cloud", time: "usually faster than local",
+      how: ["The Provider Router tries local first.", "On failure it retries with the backup key, within a daily budget cap.", "Each artifact records provider: local or cloud, shown as a badge in the UI."],
+      why: "Free and private by default, reliable when it matters. Use only sample screenshots on free tiers.",
+      tools: [["Gemini API", "proprietary, free tier"]] },
+
+    { id: "ollamaB", lane: "b", col: 4, row: 7, step: 5, kind: "det",
+      title: "Ollama on the RTX 4060", tool: "qwen3-vl:8b as gpt-5.5 · CUDA",
+      what: "Serves the local model to Screenshot-to-Code through its OpenAI-compatible API.",
+      input: "Responses API calls from Screenshot-to-Code", output: "Streamed tokens and tool calls", runs: "Laptop B GPU", time: "most of the 5 min",
+      how: ["ollama cp qwen3-vl:8b gpt-5.5 gives the model the name Screenshot-to-Code asks for.", "Must stay at 100% GPU (check with ollama ps).", "Flash attention + q8_0 KV cache keep long prompts inside 8 GB."],
+      why: "The GPU laptop does the heaviest AI job, for free.",
+      tools: [["Ollama", "MIT"], ["Qwen3-VL 8B", "Apache-2.0"], ["NVIDIA CUDA driver", "free"]] },
+
+    { id: "barrier", lane: "a", col: 2, row: 8, step: 9, kind: "det",
+      title: "Sync Barrier", tool: "XState join + hash check",
+      what: "Waits until both branches are done, then checks they were built from the same Contract.",
+      input: "Frontend HTML + backend bundle", output: "SYNCED, or a rebuild of the stale side", runs: "Laptop A", time: "instant",
+      how: ["Continue only if frontend.contractHash = backend.contractHash = current Contract hash.", "If the user edited the Contract mid-build, the stale side is rebuilt.", "The backend rebuild is instant; the frontend gets an update job, or a label patch for small changes."],
+      why: "This one rule is what keeps the two laptops in sync. A mismatched pair can never move forward.",
+      tools: [["XState v5", "MIT"]] },
+
+    { id: "wirer", lane: "a", col: 2, row: 9, step: 10, kind: "det",
+      title: "Wirer", tool: "cheerio · Babel · recast",
+      what: "Connects the generated page to the generated API.",
+      input: "index.html + api.js + Contract", output: "Wired index.html", runs: "Laptop A", time: "about 1 s",
+      how: ["cheerio extracts the script type=text/babel block.", "@babel/parser builds the AST; traverse finds SAMPLE_EMPLOYEES and data-action elements.", "Replaces the sample constant with a call to api.employees.list(), and hooks buttons to create, update and delete with loading and error states.", "recast prints the code with the original formatting, so the diff stays readable."],
+      why: "A codemod is exact and repeatable; asking an LLM to edit code is neither. Markers agreed in advance make this easy.",
+      tools: [["cheerio", "MIT"], ["@babel/parser", "MIT"], ["@babel/traverse", "MIT"], ["recast", "MIT"]] },
+
+    { id: "verify", lane: "a", col: 2, row: 10, step: 11, kind: "det",
+      title: "Verifier + repair", tool: "Vitest · Supertest · Playwright",
+      what: "Proves the app works before anyone sees it.",
+      input: "Wired app", output: "READY, or a repair job, or NEEDS_ATTENTION", runs: "Laptop A (sandbox)", time: "estimate under 1 min",
+      how: ["1. Every Contract field and action has its marker in the JSX.", "2. JSX still parses after wiring.", "3. Backend boots; /health returns 200.", "4. Generated API tests pass (mongodb-memory-server).", "5. Playwright: add → see in table → edit → delete.", "If check 1 fails: an update job to Laptop B asks for exactly the missing markers (at most 2 tries, then cloud)."],
+      why: "Only verified apps are previewed or published, so the demo never shows a broken button.",
+      tools: [["Vitest", "MIT"], ["Supertest", "MIT"], ["mongodb-memory-server", "MIT"], ["Playwright", "Apache-2.0"]] },
+
+    { id: "sandbox", lane: "a", col: 3, row: 11, step: 12, kind: "det",
+      title: "Preview sandbox", tool: "Colima · Docker · Compose",
+      what: "Runs the generated app so the user can click through it before publishing.",
+      input: "Verified app", output: "Preview URL on a separate port", runs: "Laptop A", time: "seconds to start",
+      how: ["Two containers: app + mongo on a private network.", "Memory and CPU limits, non-root user, read-only filesystem.", "No secrets inside: no GitHub token, no API keys.", "Auto-stops after 30 minutes; one preview at a time."],
+      why: "Generated code is treated as untrusted. A different origin also stops it from reading our UI's cookies.",
+      tools: [["Colima", "MIT"], ["Docker Engine", "Apache-2.0"], ["Docker Compose", "Apache-2.0"]] },
+
+    { id: "tryapp", lane: "user", col: 1, row: 11, step: 12, kind: "human",
+      title: "Try the live app", tool: "Preview link",
+      what: "The user adds, edits, searches and deletes real records stored in MongoDB.",
+      input: "Preview URL", output: "Confidence, then Publish", runs: "User's browser", time: "as long as they like",
+      how: ["Opens the preview in a new tab.", "Data persists in the sandbox's own Mongo until it stops."],
+      why: "Seeing the working app is the moment the product proves itself.",
+      tools: [["Browser", "—"]] },
+
+    { id: "publish", lane: "a", col: 2, row: 12, step: 13, kind: "det",
+      title: "GitHub Publisher", tool: "OAuth App · Octokit",
+      what: "Creates a new repo in the user's account and pushes the whole app as one commit.",
+      input: "Verified app + user's encrypted token", output: "Repo URL + commit SHA", runs: "Laptop A", time: "seconds",
+      how: ["Sign in with GitHub (read:user). Publish asks for public_repo + workflow.", "POST /user/repos creates a new repo (never overwrites).", "Git Data API: blobs → tree → commit → update refs/heads/main.", "The token is stored encrypted (AES-256-GCM) and never leaves Laptop A."],
+      why: "No git binary or token on disk on the server, one clean commit, minimal permissions.",
+      tools: [["Octokit", "MIT"], ["GitHub OAuth App", "free"], ["node:crypto AES-256-GCM", "built-in"]] },
+
+    { id: "github", lane: "x", col: 5, row: 12, step: 13, kind: "det",
+      title: "User's GitHub repo", tool: "GitHub Actions CI",
+      what: "The user owns the code. CI re-runs the generated tests and shows a green check.",
+      input: "One commit", output: "Working repo + CI badge", runs: "GitHub", time: "CI about 1–2 min",
+      how: ["README explains how to run it with docker compose up.", "contract.json documents what was built and why."],
+      why: "Inspectable code in the user's own account, not a black box.",
+      tools: [["GitHub", "free"], ["GitHub Actions", "free for public repos"]] }
+  ];
+
+  var EDGES = [
+    { id: "e1", from: "upload", to: "intake", label: "image" },
+    { id: "e2", from: "intake", to: "mongo", label: "save" },
+    { id: "e3", from: "intake", to: "extract" },
+    { id: "e4", from: "extract", to: "ollamaA", label: "JSON Schema" },
+    { id: "e5", from: "extract", to: "contract", label: "validated" },
+    { id: "e6", from: "contract", to: "review", oy: -9, label: "draft" },
+    { id: "e7", from: "review", to: "contract", oy: 9, label: "edits → vN+1" },
+    { id: "e8", from: "contract", to: "orch" },
+    { id: "e9", from: "orch", to: "gateway", label: "image + Contract text" },
+    { id: "e10", from: "orch", to: "codegen", label: "Contract" },
+    { id: "e14", from: "orch", to: "status", label: "SSE" },
+    { id: "e11", from: "gateway", to: "s2c", label: "WebSocket" },
+    { id: "e12", from: "s2c", to: "ollamaB", label: "local mode" },
+    { id: "e13", from: "s2c", to: "cloud", dash: true, label: "backup" },
+    { id: "e15", from: "gateway", to: "barrier", label: "HTML + hash" },
+    { id: "e16", from: "codegen", to: "barrier", label: "code + hash" },
+    { id: "e17", from: "barrier", to: "wirer" },
+    { id: "e18", from: "wirer", to: "verify" },
+    { id: "e19", from: "verify", to: "gateway", dash: true, label: "repair job" },
+    { id: "e20", from: "verify", to: "sandbox" },
+    { id: "e21", from: "sandbox", to: "tryapp", label: "preview URL" },
+    { id: "e22", from: "verify", to: "publish", label: "checks passed" },
+    { id: "e23", from: "publish", to: "github", label: "1 commit" }
+  ];
+
+  var STEPS = [
+    { t: "Upload", s: "The user uploads a screenshot. Laptop A shrinks it, hashes it and saves a new project in MongoDB.", n: ["upload", "intake", "mongo"], e: ["e1", "e2"], f: "intake" },
+    { t: "Extract the Contract", s: "The local vision model on the Mac reads the screenshot and must return JSON that matches our schema.", n: ["intake", "extract", "ollamaA"], e: ["e3", "e4"], f: "extract" },
+    { t: "Version it", s: "The Contract is validated, versioned and hashed. This hash is what keeps the laptops in sync.", n: ["extract", "contract"], e: ["e5"], f: "contract" },
+    { t: "Fan-out", s: "The orchestrator starts both branches at once and streams progress to the user.", n: ["contract", "orch", "gateway", "codegen", "status"], e: ["e8", "e9", "e10", "e14"], f: "orch" },
+    { t: "Frontend on the GPU", s: "The Gateway drives Screenshot-to-Code, which uses the local model on the RTX 4060. This is the slow branch (about 5 min).", n: ["gateway", "s2c", "ollamaB"], e: ["e11", "e12"], f: "s2c" },
+    { t: "Backend in a second", s: "Meanwhile, templates turn the same Contract into the server, the api.js client and the tests.", n: ["codegen"], e: ["e10"], f: "codegen" },
+    { t: "Human review in parallel", s: "While the GPU works, the user reviews the Contract. An edit creates a new version, and stale work will be rebuilt.", n: ["contract", "review"], e: ["e6", "e7"], f: "review" },
+    { t: "Backup if needed", s: "If the local model fails or times out, the same request goes to the backup key. Each result records which provider made it.", n: ["s2c", "cloud"], e: ["e13"], f: "cloud" },
+    { t: "Sync Barrier", s: "Both results arrive with their Contract hash. Only if both match the current version does the flow continue.", n: ["gateway", "codegen", "barrier"], e: ["e15", "e16"], f: "barrier" },
+    { t: "Wire", s: "A Babel codemod replaces the sample data with real API calls and hooks up the buttons.", n: ["barrier", "wirer"], e: ["e17"], f: "wirer" },
+    { t: "Verify, or repair", s: "Markers, parsing, boot, API tests and a browser smoke test. Missing markers trigger a narrow repair job on Laptop B.", n: ["wirer", "verify", "gateway"], e: ["e18", "e19"], f: "verify" },
+    { t: "Preview", s: "The verified app runs in a locked-down container. The user clicks through it with real data.", n: ["verify", "sandbox", "tryapp"], e: ["e20", "e21"], f: "sandbox" },
+    { t: "Publish", s: "One commit to a new repo in the user's GitHub. CI re-runs the tests and turns green.", n: ["verify", "publish", "github"], e: ["e22", "e23"], f: "publish" }
+  ];
+
+  var LANE_NAMES = { user: "User", a: "Laptop A", b: "Laptop B", x: "External" };
+  var byId = {};
+  NODES.forEach(function (n) { byId[n.id] = n; });
+
+  var diagram = document.getElementById("diagram");
+  var svg = document.getElementById("wires");
+  var panel = document.getElementById("panel");
+  var panelInner = document.getElementById("panel-inner");
+  var narration = document.getElementById("narration");
+  var stepcount = document.getElementById("stepcount");
+  var playBtn = document.getElementById("play");
+
+  var listMQ = window.matchMedia("(max-width: 899px)");
+  var sheetMQ = window.matchMedia("(max-width: 1279px)");
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+
+  NODES.slice().sort(function (a, b) { return a.row - b.row || a.col - b.col; }).forEach(function (n) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "node";
+    b.dataset.id = n.id;
+    b.dataset.lane = n.lane;
+    b.dataset.kind = n.kind;
+    b.style.gridColumn = String(n.col);
+    b.style.gridRow = String(n.row);
+    b.setAttribute("aria-label", "Step " + n.step + ": " + n.title + ". Show details");
+    b.innerHTML =
+      '<span class="n-lane">' + esc(LANE_NAMES[n.lane]) + '</span>' +
+      '<span class="n-top"><span class="n-step">' + n.step + '</span><span class="n-title">' + esc(n.title) + '</span></span>' +
+      '<span class="n-tool">' + esc(n.tool) + '</span>';
+    b.addEventListener("click", function () { stopPlay(); select(n.id, true); });
+    diagram.appendChild(b);
+  });
+
+  function nodeEl(id) { return diagram.querySelector('.node[data-id="' + id + '"]'); }
+
+  function rel(el) {
+    var r = el.getBoundingClientRect(), d = diagram.getBoundingClientRect();
+    return { l: r.left - d.left, t: r.top - d.top, r: r.right - d.left, b: r.bottom - d.top,
+             cx: (r.left + r.right) / 2 - d.left, cy: (r.top + r.bottom) / 2 - d.top };
+  }
+
+  function geom(e) {
+    var a = rel(nodeEl(e.from)), b = rel(nodeEl(e.to)), oy = e.oy || 0, p0, p1, p2, p3;
+    if (Math.abs(a.cx - b.cx) < 4) {
+      if (b.t > a.b) {
+        p0 = [a.cx, a.b]; p3 = [b.cx, b.t];
+        var m = (p3[1] - p0[1]) / 2; p1 = [p0[0], p0[1] + m]; p2 = [p3[0], p3[1] - m];
+      } else {
+        p0 = [a.r, a.cy]; p3 = [b.r, b.cy]; p1 = [a.r + 70, a.cy]; p2 = [b.r + 70, b.cy];
+      }
+    } else if (b.cx > a.cx) {
+      p0 = [a.r, a.cy + oy]; p3 = [b.l - 2, b.cy + oy];
+    } else {
+      p0 = [a.l, a.cy + oy]; p3 = [b.r + 2, b.cy + oy];
+    }
+    if (!p1) {
+      var dx = (p3[0] - p0[0]) * 0.5;
+      p1 = [p0[0] + dx, p0[1]]; p2 = [p3[0] - dx, p3[1]];
+    }
+    var f = function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); };
+    return {
+      d: "M" + f(p0) + " C" + f(p1) + " " + f(p2) + " " + f(p3),
+      mx: (p0[0] + 3 * p1[0] + 3 * p2[0] + p3[0]) / 8,
+      my: (p0[1] + 3 * p1[1] + 3 * p2[1] + p3[1]) / 8
+    };
+  }
+
+  function draw() {
+    if (listMQ.matches) { svg.innerHTML = ""; return; }
+    var w = diagram.offsetWidth, h = diagram.offsetHeight;
+    svg.setAttribute("width", w); svg.setAttribute("height", h);
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    var out = '<defs>' +
+      '<marker id="arrow" class="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>' +
+      '<marker id="arrow-on" class="arrow-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>' +
+      '</defs>';
+    EDGES.forEach(function (e) {
+      var g = geom(e);
+      out += '<path class="edge' + (e.dash ? " dash" : "") + '" data-e="' + e.id + '" d="' + g.d + '" marker-end="url(#arrow)"/>';
+      if (e.label) out += '<text class="elabel" data-e="' + e.id + '" x="' + g.mx.toFixed(1) + '" y="' + (g.my - 5).toFixed(1) + '" text-anchor="middle">' + esc(e.label) + '</text>';
+    });
+    svg.innerHTML = out;
+    applyState();
+  }
+
+  var selected = "contract";
+  var stepIdx = -1;
+  var timer = null;
+
+  function applyState() {
+    var onNodes = [], onEdges = [];
+    if (stepIdx >= 0) {
+      onNodes = STEPS[stepIdx].n; onEdges = STEPS[stepIdx].e;
+    } else if (selected) {
+      onNodes = [selected];
+      EDGES.forEach(function (e) {
+        if (e.from === selected || e.to === selected) {
+          onEdges.push(e.id);
+          if (onNodes.indexOf(e.from) < 0) onNodes.push(e.from);
+          if (onNodes.indexOf(e.to) < 0) onNodes.push(e.to);
+        }
+      });
+    }
+    var any = onNodes.length > 0;
+    diagram.querySelectorAll(".node").forEach(function (el) {
+      var id = el.dataset.id, isOn = onNodes.indexOf(id) >= 0;
+      el.classList.toggle("on", stepIdx >= 0 && isOn);
+      el.classList.toggle("sel", stepIdx < 0 && id === selected);
+      el.classList.toggle("dim", any && !isOn);
+    });
+    svg.querySelectorAll(".edge").forEach(function (el) {
+      var isOn = onEdges.indexOf(el.dataset.e) >= 0;
+      el.classList.toggle("on", isOn);
+      el.classList.toggle("dim", any && !isOn);
+      el.setAttribute("marker-end", isOn ? "url(#arrow-on)" : "url(#arrow)");
+    });
+    svg.querySelectorAll(".elabel").forEach(function (el) {
+      var isOn = onEdges.indexOf(el.dataset.e) >= 0;
+      el.classList.toggle("on", isOn);
+      el.classList.toggle("dim", any && !isOn);
+    });
+  }
+
+  function renderPanel(id) {
+    var n = byId[id];
+    var tools = n.tools.map(function (t) { return "<li>" + esc(t[0]) + " <em>· " + esc(t[1]) + "</em></li>"; }).join("");
+    var how = n.how.map(function (h) { return "<li>" + esc(h) + "</li>"; }).join("");
+    panelInner.innerHTML =
+      '<button class="btn close" type="button" id="close-panel">Close</button>' +
+      '<p class="eyebrow">Step ' + n.step + " · " + esc(LANE_NAMES[n.lane]) + (n.kind === "ai" ? " · uses AI" : "") + "</p>" +
+      "<h3>" + esc(n.title) + "</h3>" +
+      "<p>" + esc(n.what) + "</p>" +
+      "<dl><dt>In</dt><dd>" + esc(n.input) + "</dd><dt>Out</dt><dd>" + esc(n.output) + "</dd><dt>Runs on</dt><dd>" + esc(n.runs) + "</dd><dt>Time</dt><dd>" + esc(n.time) + "</dd></dl>" +
+      "<h4>How it works</h4><ol>" + how + "</ol>" +
+      '<h4>Why this way</h4><p class="why">' + esc(n.why) + "</p>" +
+      '<h4>Tools</h4><ul class="chips">' + tools + "</ul>";
+    var c = document.getElementById("close-panel");
+    if (c) c.addEventListener("click", function () { panel.classList.remove("open"); });
+  }
+
+  function select(id, userAction) {
+    selected = id;
+    stepIdx = -1;
+    renderPanel(id);
+    if (userAction && sheetMQ.matches) panel.classList.add("open");
+    narration.innerHTML = "<b>" + esc(byId[id].title) + ".</b> " + esc(byId[id].what);
+    stepcount.textContent = "";
+    applyState();
+  }
+
+  function showStep(i) {
+    stepIdx = (i + STEPS.length) % STEPS.length;
+    var s = STEPS[stepIdx];
+    narration.innerHTML = "<b>" + (stepIdx + 1) + ". " + esc(s.t) + ".</b> " + esc(s.s);
+    stepcount.textContent = (stepIdx + 1) + " / " + STEPS.length;
+    if (!sheetMQ.matches) renderPanel(s.f);
+    selected = s.f;
+    applyState();
+    var el = nodeEl(s.f);
+    if (el && listMQ.matches && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  function stopPlay() {
+    if (timer) { clearInterval(timer); timer = null; }
+    playBtn.textContent = "▶ Play the flow";
+  }
+
+  playBtn.addEventListener("click", function () {
+    if (timer) { stopPlay(); return; }
+    showStep(stepIdx < 0 || stepIdx === STEPS.length - 1 ? 0 : stepIdx + 1);
+    playBtn.textContent = "❚❚ Pause";
+    timer = setInterval(function () {
+      if (stepIdx >= STEPS.length - 1) { stopPlay(); return; }
+      showStep(stepIdx + 1);
+    }, 3600);
+  });
+  document.getElementById("next").addEventListener("click", function () { stopPlay(); showStep(stepIdx + 1); });
+  document.getElementById("prev").addEventListener("click", function () { stopPlay(); showStep(stepIdx <= 0 ? STEPS.length - 1 : stepIdx - 1); });
+  document.getElementById("reset").addEventListener("click", function () {
+    stopPlay(); stepIdx = -1; selected = null; stepcount.textContent = "";
+    narration.innerHTML = "<b>13 steps.</b> Press Play to watch one screenshot travel through the system, or click any box to see how it works.";
+    applyState();
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") panel.classList.remove("open"); });
+
+  var TL = [
+    { name: "Laptop A", color: "var(--c-a)", bars: [
+      { a: 0, b: 2, k: "det", l: "Intake 0–2 s" },
+      { a: 2, b: 40, k: "ai", l: "Contract ~2–40 s (est.)" },
+      { a: 40, b: 42, k: "det", l: "Backend + client + tests ~1 s" },
+      { a: 42, b: 340, k: "wait", l: "free while the GPU works" },
+      { a: 340, b: 342, k: "det", l: "Wire ~1 s" },
+      { a: 342, b: 390, k: "det", l: "Verify < 1 min (est.)" },
+      { a: 390, b: 400, k: "det", l: "Publish ~10 s" } ] },
+    { name: "Laptop B", color: "var(--c-b)", bars: [
+      { a: 0, b: 40, k: "wait", l: "waits for the Contract" },
+      { a: 40, b: 340, k: "gpu", l: "Frontend on RTX 4060 ~5 min (measured)" } ] },
+    { name: "User", color: "var(--c-user)", bars: [
+      { a: 40, b: 200, k: "human", l: "Reviews the Contract while the GPU works" },
+      { a: 345, b: 400, k: "human", l: "Tries the preview, then publishes" } ] }
+  ];
+  var MAX = 420, tl = document.getElementById("tl"), html = "";
+  TL.forEach(function (r) {
+    var bars = r.bars.map(function (b) {
+      return '<span class="tl-bar ' + b.k + '" title="' + esc(b.l) + '" style="left:' + (b.a / MAX * 100).toFixed(2) + "%;width:" + ((b.b - b.a) / MAX * 100).toFixed(2) + '%"></span>';
+    }).join("");
+    var notes = r.bars.map(function (b) { return "<span>" + esc(b.l) + "</span>"; }).join("");
+    html += '<div class="tl-row"><span class="tl-name" style="color:' + r.color + '">' + r.name + '</span><div class="tl-track">' + bars + '</div><div class="tl-notes">' + notes + "</div></div>";
+  });
+  var ticks = "";
+  for (var m = 0; m <= 7; m++) ticks += '<span style="left:' + (m * 60 / MAX * 100).toFixed(2) + '%">' + m + " min</span>";
+  html += '<div class="tl-axis"><span></span><div class="tl-ticks">' + ticks + "</div></div>";
+  tl.innerHTML = html;
+
+  renderPanel("contract");
+  if ("ResizeObserver" in window) new ResizeObserver(function () { draw(); }).observe(diagram);
+  window.addEventListener("resize", draw);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+  draw();
+})();
+</script>
+</body>
+</html>

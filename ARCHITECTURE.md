@@ -2,7 +2,7 @@
 
 > **One-line summary:** From one screenshot we first extract a small **Contract** (resource, fields, actions). **Both laptops build against that same Contract at the same time**: Laptop B builds the frontend (Screenshot-to-Code, GPU) and Laptop A builds the backend (our templates). A **Sync Barrier** waits until both are built for the *same* Contract version. Then we **wire, verify, preview** and **push a working app to the user's GitHub**. Local free models are the default, and a cloud API key is the automatic backup.
 
-**Status:** Draft v2 for team review · **Date:** 14 Oct 2026 · Replaces v1 · Related: [plan.md](plan.md)
+**Status:** v2, approved · **Date:** 14 Oct 2026 · Replaces v1 · Related: [plan.md](plan.md)
 
 ---
 
