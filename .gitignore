@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 *.log
+npm-debug.log*
 
 # Secrets: only the .example files are committed
 .env
@@ -15,3 +16,4 @@ Thumbs.db
 
 # Generated apps and job workspaces (Builder API output)
 runs/
+*-app/
