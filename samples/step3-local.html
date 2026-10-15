@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Employee Management</h1>
+
+        <div class="mb-8">
+            <input type="text" placeholder="Search employees" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" data-action="search">
+        </div>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Add Employee</h2>
+            <form id="addEmployeeForm" class="space-y-4">
+                <div class="mb-4">
+                    <label for="fullName" class="block text-gray-700 font-medium mb-2">Full Name</label>
+                    <input type="text" id="fullName" name="fullName" data-field="fullName" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label for="email" class="block text-gray-700 font-medium mb-2">Email</label>
+                    <input type="email" id="email" name="email" data-field="email" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label for="department" class="block text-gray-700 font-medium mb-2">Department</label>
+                    <select id="department" name="department" data-field="department" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select Department</option>
+                        <option value="HR">HR</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Sales">Sales</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="salary" class="block text-gray-700 font-medium mb-2">Salary</label>
+                    <input type="number" id="salary" name="salary" data-field="salary" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300">Add Employee</button>
+            </form>
+        </section>
+
+        <section>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Employees</h2>
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="border border-gray-300 px-4 py-2">Full Name</th>
+                        <th class="border border-gray-300 px-4 py-2">Email</th>
+                        <th class="border border-gray-300 px-4 py-2">Department</th>
+                        <th class="border border-gray-300 px-4 py-2">Salary</th>
+                        <th class="border border-gray-300 px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="employeeTableBody">
+                    <!-- Sample rows will be dynamically inserted here -->
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        // Sample employee data
+        const SAMPLE_EMPLOYEES = [
+            {
+                fullName: "Aarav Sharma",
+                email: "aarav@example.com",
+                department: "Engineering",
+                salary: 60000
+            },
+            {
+                fullName: "Priya Singh",
+                email: "priya@example.com",
+                department: "HR",
+                salary: 45000
+            }
+        ];
+
+        // Function to render the employee table
+        function renderEmployeeTable() {
+            const tableBody = document.getElementById('employeeTableBody');
+            tableBody.innerHTML = '';
+            
+            SAMPLE_EMPLOYEES.forEach(employee => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="border border-gray-300 px-4 py-2" data-field="fullName">${employee.fullName}</td>
+                    <td class="border border-gray-300 px-4 py-2" data-field="email">${employee.email}</td>
+                    <td class="border border-gray-300 px-4 py-2" data-field="department">${employee.department}</td>
+                    <td class="border border-gray-300 px-4 py-2" data-field="salary">${employee.salary}</td>
+                    <td class="border border-gray-300 px-4 py-2">
+                        <button type="button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1 px-3 rounded mr-2" data-action="update">Edit</button>
+                        <button type="button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1 px-3 rounded" data-action="delete">Delete</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            renderEmployeeTable();
+        });
+
+        // Add event listener to form submission
+        document.getElementById('addEmployeeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const fullName = document.getElementById('fullName').value;
+            const email = document.getElementById('email').value;
+            const department = document.getElementById('department').value;
+            const salary = document.getElementById('salary').value;
+            
+            // Validate required fields
+            if (!fullName || !email || !department || !salary) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            // Add new employee to sample data
+            SAMPLE_EMPLOYEES.push({
+                fullName: fullName,
+                email: email,
+                department: department,
+                salary: parseInt(salary)
+            });
+            
+            // Reload table
+            renderEmployeeTable();
+            
+            // Reset form
+            this.reset();
+        });
+
+        // Add event listeners to Edit and Delete buttons
+        document.addEventListener('click', function(e) {
+            if (e.target.dataset.action === "update") {
+                alert('Update functionality is not implemented yet.');
+                // Here you would typically open a modal or form for editing
+            } else if (e.target.dataset.action === "delete") {
+                alert('Delete functionality is not implemented yet.');
+                // Here you would typically confirm deletion and remove the row
+            }
+        });
+
+        // Add event listener to search input
+        document.querySelector('input[data-action="search"]').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            const rows = document.querySelectorAll('#employeeTableBody tr');
+            
+            rows.forEach(row => {
+                const fullName = row.querySelector('[data-field="fullName"]').textContent.toLowerCase();
+                const email = row.querySelector('[data-field="email"]').textContent.toLowerCase();
+                const department = row.querySelector('[data-field="department"]').textContent.toLowerCase();
+                const salary = row.querySelector('[data-field="salary"]').textContent.toLowerCase();
+                
+                const matches = fullName.includes(searchTerm) ||
+                               email.includes(searchTerm) ||
+                               department.includes(searchTerm) ||
+                               salary.includes(searchTerm);
+                
+                row.style.display = matches ? "table-row" : "none";
+            });
+        });
+    </script>
+</body>
+</html>

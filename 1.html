@@ -1,0 +1,118 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Management</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 15px auto;
+            padding: 10px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 7px;
+            margin: 5px 0 10px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 7px 10px;
+            margin: 3px;
+            cursor: pointer;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 6px 4px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Employee Management</h2>
+
+    <input type="text" placeholder="Search employees"
+           data-action="search">
+
+    <h3>Add Employee</h3>
+
+    <form>
+        <label for="fullName">Full Name</label>
+        <input type="text" id="fullName" name="fullName"
+               data-field="fullName">
+
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email"
+               data-field="email">
+
+        <label for="department">Department</label>
+        <select id="department" name="department"
+                data-field="department">
+            <option value="">Select Department</option>
+            <option value="HR">HR</option>
+            <option value="Engineering">Engineering</option>
+            <option value="Sales">Sales</option>
+        </select>
+
+        <label for="salary">Salary</label>
+        <input type="number" id="salary" name="salary"
+               data-field="salary">
+
+        <button type="button" data-action="create">
+            Add Employee
+        </button>
+    </form>
+
+    <h3>Employees</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Salary</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            <tr>
+                <td data-field="fullName">Aarav Sharma</td>
+                <td data-field="email">aarav@example.com</td>
+                <td data-field="department">Engineering</td>
+                <td data-field="salary">60000</td>
+                <td>
+                    <button type="button" data-action="update">Edit</button>
+                    <button type="button" data-action="delete">Delete</button>
+                </td>
+            </tr>
+
+            <tr>
+                <td data-field="fullName">Priya Singh</td>
+                <td data-field="email">priya@example.com</td>
+                <td data-field="department">HR</td>
+                <td data-field="salary">45000</td>
+                <td>
+                    <button type="button" data-action="update">Edit</button>
+                    <button type="button" data-action="delete">Delete</button>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+</body>
+</html>
