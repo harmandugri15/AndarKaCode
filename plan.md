@@ -3,7 +3,7 @@
 > **Design:** see [ARCHITECTURE.md](ARCHITECTURE.md) (v2, approved). This file is our **step-by-step to-do list**.
 > **Rule:** do one step, report back, then move on. Tick the box when its "Done when" is true.
 
-**Current step:** ▶ **Step 3: Contract instructions + speed test + backup key**
+**Current step:** ▶ **Step 4: Contract Extractor experiment (Laptop A)**
 
 ---
 
@@ -23,7 +23,7 @@ Every step has four parts:
 
 - [x] **Step 1: Ollama on Laptop B's GPU.** ✅ 14 Oct: runs well on the GPU; correctly identified the screenshot's columns and buttons. Install Ollama, pull `qwen3-vl:8b`, and confirm it runs **100% on the GPU**.
 - [x] **Step 2: Screenshot-to-Code on Laptop B (local model).** ✅ 15 Oct: works with local `qwen3-vl:8b` (alias `gpt-5.5`), about 60–70% match, **over 5 min** per page. Run it with Ollama behind it, apply the 1-variant patch, generate one dashboard through *its own* UI, and capture the WebSocket messages in DevTools.
-- [ ] **Step 3: Contract instructions + backup key.** Send field names and `data-field` / `data-action` markers as text with the image, and check they appear in the HTML. Try the cloud key path once.
+- [x] **Step 3: Contract instructions + backup key.** ✅ 15 Oct: local 3 min 38 s, Gemini 30 s. All `data-field` markers present in both; local missed `data-action="create"`; one output had no `SAMPLE_EMPLOYEES`. Send field names and `data-field` / `data-action` markers as text with the image, and check they appear in the HTML. Try the cloud key path once.
 - [ ] **Step 4: Contract Extractor experiment (Laptop A).** A small Node script: screenshot → Ollama → valid Contract JSON. Time it.
 
 ## Phase 2: Connect the two laptops
@@ -59,3 +59,7 @@ Every step has four parts:
 | 13 Oct 2026 | Laptop A: Apple M5, 16 GB, Node 26, Python 3.14, Poetry 2.5, Ollama installed (`qwen3-vl:8b` present). No Docker or MongoDB yet. |
 | 14 Oct 2026 | Laptop B: RTX 4060 8 GB VRAM, 16 GB RAM. OS: _to fill in_. |
 | 14 Oct 2026 | Architecture v2 approved: contract-first sync, local-first with a cloud backup key, GitHub publish. |
+| 15 Oct 2026 | Laptop B OS: **Windows 11**. Screenshot-to-Code at `Desktop\screenshot-code\screenshot-to-code`; patch = 2 variant lines + 2 Windows fixes (`main.py` UTF-8, `start.py` event loop). |
+| 15 Oct 2026 | Frontend style: **`html_tailwind`**. The Wirer must not depend on `SAMPLE_*` (models sometimes skip it): render rows from the first `data-field` table row. A missing `data-action` goes to the repair step. |
+| 15 Oct 2026 | S2C picks Ollama over Gemini when an OpenAI key is in its `.env`, so the Gateway's cloud mode needs that key removed from `.env`. |
+| 15 Oct 2026 | Contract Extractor: use **`qwen3-vl:8b-instruct`** (the thinking variant returns empty `content` with structured output). Test on Laptop B: 12 s, correct Contract. Enum options only list values visible in the screenshot, so the user should review them. |

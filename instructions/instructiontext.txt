@@ -1,0 +1,18 @@
+Build this page with these EXACT field names and markers. Do not rename them.
+
+Resource: employee (plural: employees)
+Fields (in this order):
+- fullName  -> label "Full Name"
+- email     -> label "Email"
+- department -> label "Department" (options: HR, Engineering, Sales)
+- salary    -> label "Salary"
+
+Rules:
+1. Every table cell showing a field must have data-field="<fieldName>".
+2. Every form input must have name="<fieldName>" and data-field="<fieldName>".
+3. Buttons: "Add Employee" has data-action="create"; each row's Edit has
+   data-action="update"; each row's Delete has data-action="delete";
+   the search box has data-action="search".
+4. Put the sample table rows in a JavaScript array named exactly
+   const SAMPLE_EMPLOYEES = [ ... ];  and render the table from that array.
+5. Include a form (or modal) with inputs for all fields.

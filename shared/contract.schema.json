@@ -1,0 +1,51 @@
+{
+  "$comment": "What the vision model must return. version and ui.sampleConst are added by our code, not the model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resource", "fields", "actions", "rules", "openQuestions"],
+  "properties": {
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "plural", "label"],
+      "properties": {
+        "name": { "type": "string" },
+        "plural": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "label", "type", "required"],
+        "properties": {
+          "name": { "type": "string" },
+          "label": { "type": "string" },
+          "type": { "type": "string", "enum": ["string", "email", "number", "boolean", "date", "enum"] },
+          "required": { "type": "boolean" },
+          "unique": { "type": "boolean" },
+          "options": { "type": "array", "items": { "type": "string" } },
+          "min": { "type": "number" }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "enum": ["list", "create", "update", "delete", "search"] }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["delete", "auth"],
+      "properties": {
+        "delete": { "type": "string", "enum": ["soft", "hard"] },
+        "auth": { "type": "string", "enum": ["none"] }
+      }
+    },
+    "openQuestions": { "type": "array", "items": { "type": "string" } }
+  }
+}
